@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Van Udyan Biodiversity Intelligence Platform</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Leaflet GIS CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+
+    <!-- Custom Dashboard Styles -->
+    <link rel="stylesheet" href="css/styles.css">
+
+    <!-- Chart.js & Leaflet JS CDN Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+</head>
+<body>
+
+<div class="app-container">
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+        <div class="brand-header">
+            <div class="brand-icon">🌿</div>
+            <div class="brand-title">Van Udyan GIS</div>
+        </div>
+
+        <ul class="nav-list">
+            <li class="nav-item">
+                <button class="active" data-tab="overview">
+                    <span>📊</span> Overview & KPIs
+                </button>
+            </li>
+            <li class="nav-item">
+                <button data-tab="map">
+                    <span>🗺️</span> Biodiversity GIS Map
+                </button>
+            </li>
+            <li class="nav-item">
+                <button data-tab="species">
+                    <span>🌱</span> Species & Taxa
+                </button>
+            </li>
+            <li class="nav-item">
+                <button data-tab="observations">
+                    <span>👁️</span> Observation Records
+                </button>
+            </li>
+            <li class="nav-item">
+                <button data-tab="zones">
+                    <span>📐</span> Active Monitoring Zones
+                </button>
+            </li>
+            <li class="nav-item">
+                <button data-tab="management">
+                    <span>🛠️</span> Data Management (CRUD)
+                </button>
+            </li>
+            <li class="nav-item">
+                <button data-tab="export">
+                    <span>📥</span> Dataset Export & Download
+                </button>
+            </li>
+        </ul>
+
+        <!-- Scientific Data Source Transparency Disclaimer -->
+        <div class="sidebar-footer">
+            <strong>Data Source Transparency:</strong><br>
+            Current dashboard displays spatially verified <b>iNaturalist</b> observations & RSWF <b>Planted Plants</b>. Exports are generated dynamically from PostgreSQL/PostGIS.
+        </div>
+    </aside>
+
+    <!-- Main Application Container -->
+    <main class="main-content">
+
+        <!-- Top Header -->
+        <header class="top-header">
+            <div class="header-title">
+                <h1>Van Udyan Biodiversity Intelligence</h1>
+                <p>Bavdhan, Pune, Maharashtra (Plus Code: GQ9J+74Q) — Conservation Monitoring System</p>
+            </div>
+            <div style="display:flex;gap:0.75rem;align-items:center">
+                <button id="ngo-auth-status-btn" class="btn-action" style="font-size:0.8rem;padding:0.35rem 0.75rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);color:#cbd5e1" onclick="App.toggleAuthSession()">
+                    🔓 Public View Mode
+                </button>
+                <div class="source-badge" id="backend-status-badge">
+                    <span class="dot"></span> Connecting to FastAPI Backend...
+                </div>
+            </div>
+        </header>
+
+        <!-- Global Error Banner -->
+        <div id="global-error-banner" class="error-banner" style="display:none; margin: 1.5rem 2rem 0 2rem;">
+            <span id="global-error-message">Error connecting to backend API</span>
+            <button onclick="App.checkBackendHealth()" style="background:transparent;border:1px solid #ef4444;color:#fff;padding:4px 8px;border-radius:4px;cursor:pointer">Retry ↻</button>
+        </div>
+
+        <!-- 1. OVERVIEW TAB PANE -->
+        <section id="tab-overview" class="tab-pane active">
+
+            <!-- Live Dynamic KPI Cards -->
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <span class="kpi-label">Total Recorded Observations</span>
+                    <span class="kpi-value" id="kpi-total-obs">--</span>
+                    <span class="kpi-subtext">Spatially verified inside Van Udyan</span>
+                </div>
+
+                <div class="kpi-card">
+                    <span class="kpi-label">Recorded Species / Taxa</span>
+                    <span class="kpi-value" id="kpi-total-species">--</span>
+                    <span class="kpi-subtext">Taxonomically reference cataloged</span>
+                </div>
+
+                <div class="kpi-card">
+                    <span class="kpi-label">Active Monitoring Zones</span>
+                    <span class="kpi-value">3</span>
+                    <span class="kpi-subtext">RSWF Working Areas (Zone A, B, C)</span>
+                </div>
+
+                <div class="kpi-card">
+                    <span class="kpi-label">Observations Inside Active Zones</span>
+                    <span class="kpi-value" id="kpi-inside-zones">--</span>
+                    <span class="kpi-subtext">Active conservation monitoring area</span>
+                </div>
+            </div>
+
+            <!-- Dynamic Analytics Charts Grid -->
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-title">Observations Breakdown by Zone</div>
+                    <div class="chart-container">
+                        <canvas id="chart-zone-breakdown"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <div class="chart-title">Observations Breakdown by Source Stream</div>
+                    <div class="chart-container">
+                        <canvas id="chart-source-breakdown"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Phase 13 — Areas Requiring Action Panel -->
+            <div class="table-card" style="margin-top:1.5rem;padding:1.25rem">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                    <h3 style="color:#ffffff;font-size:1.15rem">🌿 Areas Requiring Action</h3>
+                    <span style="font-size:0.75rem;color:#94a3b8;background:rgba(255,255,255,0.05);padding:0.3rem 0.6rem;border-radius:4px;border:1px solid rgba(255,255,255,0.1)">Rule-Based Action Recommendations</span>
+                </div>
+                <div id="action-priorities-container" class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1rem">
+                    <div style="color:#94a3b8;font-size:0.85rem">Loading field action priorities from database...</div>
+                </div>
+            </div>
+
+            <!-- Phase 13 — Data Coverage & Scientific Terminology Card -->
+            <div class="sidebar-footer" style="background:rgba(16,185,129,0.08);border-color:#10b981;font-size:0.85rem;margin-top:1.5rem">
+                🌿 <b>Data Coverage & Provenance Note:</b> 88 unique recorded taxa in current dataset. <i>Note: Recorded observation counts represent sampling frequency in the dataset, not absolute ecological abundance or total site biodiversity. Unmonitored areas represent data gaps rather than an absence of biodiversity.</i>
+            </div>
+
+        </section>
+
+        <!-- 2. INTERACTIVE MAP TAB PANE -->
+        <section id="tab-map" class="tab-pane">
+            <div class="map-card">
+                <div class="map-header">
+                    <div>
+                        <h3 style="color:#ffffff;font-size:1.1rem">Interactive GIS Biodiversity Map</h3>
+                        <p style="color:#94a3b8;font-size:0.8rem">WGS84 EPSG:4326 PostGIS Geometries — Boundary, Active Zones & Point Sightings</p>
+                    </div>
+                    <div style="display:flex;gap:1rem;font-size:0.8rem;align-items:center">
+                        <span style="color:#f59e0b">━━ Site Boundary</span>
+                        <span style="color:#10b981">━━ Zone A/B/C</span>
+                        <span style="color:#10b981">● Active Zone Point</span>
+                        <span style="color:#f97316">● Outside Zone Point</span>
+                    </div>
+                </div>
+                <div id="leaflet-map"></div>
+            </div>
+        </section>
+
+        <!-- 3. SPECIES TAB PANE -->
+        <section id="tab-species" class="tab-pane">
+            <div class="controls-bar">
+                <input type="text" id="species-search" class="search-input" placeholder="🔍 Search species by scientific or common name..." style="width:350px;">
+            </div>
+
+            <div class="table-card">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Scientific Name</th>
+                            <th>Common Name</th>
+                            <th>Taxonomic Rank</th>
+                            <th>Recorded Sightings</th>
+                        </tr>
+                    </thead>
+                    <tbody id="species-table-body">
+                        <tr><td colspan="5" style="text-align:center;padding:2rem;">Loading species data from FastAPI backend...</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="pagination-bar">
+                    <span id="species-page-info">Page 1</span>
+                    <div style="display:flex;gap:0.5rem">
+                        <button id="species-prev-btn" class="pagination-btn" onclick="App.changeSpeciesPage(-1)">← Previous</button>
+                        <button id="species-next-btn" class="pagination-btn" onclick="App.changeSpeciesPage(1)">Next →</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. OBSERVATIONS TAB PANE -->
+        <section id="tab-observations" class="tab-pane">
+            <div class="controls-bar">
+                <input type="text" class="search-input" placeholder="🔍 Filter by species name..." oninput="App.applyObsFilter('species', this.value)" style="width:260px;">
+                
+                <select class="select-input" onchange="App.applyObsFilter('zone', this.value)">
+                    <option value="">All Zones & Areas</option>
+                    <option value="ZONE A">Zone A</option>
+                    <option value="ZONE B">Zone B</option>
+                    <option value="ZONE C">Zone C</option>
+                    <option value="OUTSIDE">Outside Active Zones</option>
+                </select>
+
+                <select class="select-input" onchange="App.applyObsFilter('quality_grade', this.value)">
+                    <option value="">All Quality Grades</option>
+                    <option value="research">Research Grade</option>
+                    <option value="needs_id">Needs ID</option>
+                </select>
+
+                <select class="select-input" onchange="App.applyObsFilter('source', this.value)">
+                    <option value="">All Data Sources</option>
+                    <option value="iNaturalist">iNaturalist</option>
+                    <option value="Planted Plants">Planted Plants</option>
+                    <option value="NGO / New Upload">NGO / New Upload</option>
+                </select>
+            </div>
+
+            <div class="table-card">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>DB ID</th>
+                            <th>Scientific Name</th>
+                            <th>Common Name</th>
+                            <th>Observer</th>
+                            <th>Observed On</th>
+                            <th>Zone Assignment</th>
+                            <th>Quality Grade</th>
+                            <th>Data Source</th>
+                        </tr>
+                    </thead>
+                    <tbody id="obs-table-body">
+                        <tr><td colspan="8" style="text-align:center;padding:2rem;">Loading observation records from FastAPI backend...</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="pagination-bar">
+                    <span id="obs-page-info">Page 1</span>
+                    <div style="display:flex;gap:0.5rem">
+                        <button id="obs-prev-btn" class="pagination-btn" onclick="App.changeObsPage(-1)">← Previous</button>
+                        <button id="obs-next-btn" class="pagination-btn" onclick="App.changeObsPage(1)">Next →</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. ZONES TAB PANE -->
+        <section id="tab-zones" class="tab-pane">
+            <h2 style="color:#ffffff;margin-bottom:1rem">Active RSWF Conservation Monitoring Zones</h2>
+            <div id="zones-cards-container" class="kpi-grid">
+                <!-- Zone cards rendered dynamically -->
+            </div>
+        </section>
+
+        <!-- 6. DATA MANAGEMENT TAB PANE (PHASE 7 CRUD) -->
+        <section id="tab-management" class="tab-pane">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+                <div>
+                    <h2 style="color:#ffffff;font-size:1.4rem">RSWF NGO Data Management (CRUD)</h2>
+                    <p style="color:#94a3b8;font-size:0.85rem">Manage RSWF Planted Plants & Field Sighting Records (iNaturalist Data Remains Protected Reference Data)</p>
+                </div>
+                <div style="display:flex;gap:0.75rem">
+                    <button class="btn-primary" onclick="App.openAddPlantModal()">🌱 + Add Planted Plant</button>
+                    <button class="btn-primary" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8)" onclick="App.openAddNgoObsModal()">📝 + Add NGO Sighting</button>
+                    <button class="btn-primary" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);box-shadow:0 0 12px rgba(139,92,246,0.3)" onclick="App.openUploadPhotoModal()">📷 + Upload Photo (EXIF GPS)</button>
+                </div>
+            </div>
+
+            <!-- Controls & Filters for Planted Plants -->
+            <div class="controls-bar">
+                <input type="text" class="search-input" placeholder="🔍 Search planted species..." oninput="App.applyPlantedFilter('species', this.value)" style="width:260px;">
+
+                <select class="select-input" onchange="App.applyPlantedFilter('status', this.value)">
+                    <option value="">All Health Statuses</option>
+                    <option value="Alive">Alive</option>
+                    <option value="Dead">Dead</option>
+                    <option value="Unknown">Unknown</option>
+                </select>
+
+                <select class="select-input" onchange="App.applyPlantedFilter('zone', this.value)">
+                    <option value="">All Active Zones</option>
+                    <option value="ZONE A">Zone A</option>
+                    <option value="ZONE B">Zone B</option>
+                    <option value="ZONE C">Zone C</option>
+                </select>
+            </div>
+
+            <!-- Planted Plants Data Table -->
+            <div class="table-card">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Plant Code</th>
+                            <th>Scientific Name</th>
+                            <th>Common Name</th>
+                            <th>Planting Date</th>
+                            <th>Zone</th>
+                            <th>Condition Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="planted-table-body">
+                        <tr><td colspan="7" style="text-align:center;padding:2rem;">Loading planted plant records...</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="pagination-bar">
+                    <span id="planted-page-info">Page 1</span>
+                    <div style="display:flex;gap:0.5rem">
+                        <button id="planted-prev-btn" class="pagination-btn" onclick="App.changePlantedPage(-1)">← Previous</button>
+                        <button id="planted-next-btn" class="pagination-btn" onclick="App.changePlantedPage(1)">Next →</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 7. DATASET EXPORT & DOWNLOAD TAB PANE (PHASE 8) -->
+        <section id="tab-export" class="tab-pane">
+            <h2 style="color:#ffffff;font-size:1.4rem;margin-bottom:0.5rem">Dataset Export & Download Center</h2>
+            <p style="color:#94a3b8;font-size:0.875rem;margin-bottom:2rem">Download current PostgreSQL/PostGIS biodiversity datasets in CSV, WGS84 GeoJSON, and combined ZIP package formats.</p>
+
+            <div class="charts-grid" style="grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;">
+                
+                <!-- Observations Export Card -->
+                <div class="kpi-card" style="height:auto">
+                    <h3 style="color:#ffffff;font-size:1.15rem;margin-bottom:0.5rem">👁️ Observations Dataset</h3>
+                    <p style="color:#94a3b8;font-size:0.8rem;margin-bottom:1rem">Export observation records with spatial coordinates and taxonomy metadata.</p>
+                    
+                    <div class="form-group">
+                        <label>Filter Data Source Stream</label>
+                        <select id="export-obs-source" class="select-input" style="width:100%">
+                            <option value="">All Sources (iNaturalist & NGO)</option>
+                            <option value="iNaturalist">iNaturalist Only</option>
+                            <option value="NGO / New Upload">NGO / New Upload Only</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Filter Active Zone</label>
+                        <select id="export-obs-zone" class="select-input" style="width:100%">
+                            <option value="">All Zones & Areas</option>
+                            <option value="ZONE A">Zone A</option>
+                            <option value="ZONE B">Zone B</option>
+                            <option value="ZONE C">Zone C</option>
+                            <option value="OUTSIDE">Outside Active Zones</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Filter Quality Grade</label>
+                        <select id="export-obs-quality" class="select-input" style="width:100%">
+                            <option value="">All Quality Grades</option>
+                            <option value="research">Research Grade</option>
+                            <option value="needs_id">Needs ID</option>
+                        </select>
+                    </div>
+
+                    <div style="display:flex;gap:0.5rem;margin-top:1.25rem">
+                        <button class="btn-primary" style="flex:1" onclick="App.downloadObsExport('csv')">📄 Download CSV</button>
+                        <button class="btn-primary" style="flex:1;background:linear-gradient(135deg,#3b82f6,#1d4ed8)" onclick="App.downloadObsExport('geojson')">🗺️ Download GeoJSON</button>
+                    </div>
+                </div>
+
+                <!-- Planted Plants Export Card -->
+                <div class="kpi-card" style="height:auto">
+                    <h3 style="color:#ffffff;font-size:1.15rem;margin-bottom:0.5rem">🌱 Planted Plants Dataset</h3>
+                    <p style="color:#94a3b8;font-size:0.8rem;margin-bottom:1rem">Export RSWF plantation records, plant codes, planting dates, and health conditions.</p>
+                    
+                    <div class="form-group">
+                        <label>Filter Health Condition Status</label>
+                        <select id="export-planted-status" class="select-input" style="width:100%">
+                            <option value="">All Statuses (Alive, Dead, Unknown)</option>
+                            <option value="Alive">Alive Only</option>
+                            <option value="Dead">Dead Only</option>
+                            <option value="Unknown">Unknown Only</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Filter Active Zone</label>
+                        <select id="export-planted-zone" class="select-input" style="width:100%">
+                            <option value="">All Active Zones</option>
+                            <option value="ZONE A">Zone A</option>
+                            <option value="ZONE B">Zone B</option>
+                            <option value="ZONE C">Zone C</option>
+                        </select>
+                    </div>
+
+                    <div style="display:flex;gap:0.5rem;margin-top:4rem">
+                        <button class="btn-primary" style="flex:1" onclick="App.downloadPlantedExport('csv')">📄 Download CSV</button>
+                        <button class="btn-primary" style="flex:1;background:linear-gradient(135deg,#3b82f6,#1d4ed8)" onclick="App.downloadPlantedExport('geojson')">🗺️ Download GeoJSON</button>
+                    </div>
+                </div>
+
+                <!-- Species & Complete Package Card -->
+                <div class="kpi-card" style="height:auto">
+                    <h3 style="color:#ffffff;font-size:1.15rem;margin-bottom:0.5rem">📦 Species Catalog & Complete Package</h3>
+                    <p style="color:#94a3b8;font-size:0.8rem;margin-bottom:1.5rem">Export species reference catalog or complete multi-file archive package.</p>
+                    
+                    <div style="margin-bottom:1.5rem">
+                        <div style="font-size:0.85rem;color:#e2e8f0;font-weight:600;margin-bottom:0.5rem">Species Reference Catalog</div>
+                        <button class="btn-primary" style="width:100%" onclick="App.downloadSpeciesExport()">📄 Download Species CSV</button>
+                    </div>
+
+                    <hr style="border-color:var(--border-color);margin-bottom:1.5rem">
+
+                    <div>
+                        <div style="font-size:0.85rem;color:#e2e8f0;font-weight:600;margin-bottom:0.5rem">Complete Dataset Archive (ZIP)</div>
+                        <p style="color:#94a3b8;font-size:0.75rem;margin-bottom:0.75rem">Contains observations.csv, planted_plants.csv, species.csv, observations.geojson, and planted_plants.geojson.</p>
+                        <button class="btn-primary" style="width:100%;background:linear-gradient(135deg,#8b5cf6,#6d28d9);box-shadow:0 0 12px rgba(139,92,246,0.3)" onclick="App.downloadCompletePackage()">📦 Download Complete Package (ZIP)</button>
+                    </div>
+                </div>
+
+                <!-- Phase 14.1 — NGO Conservation & Plantation Planning Reports Card -->
+                <div class="kpi-card" style="height:auto">
+                    <h3 style="color:#ffffff;font-size:1.15rem;margin-bottom:0.5rem">📊 NGO Conservation & Plantation Planning Reports</h3>
+                    <p style="color:#94a3b8;font-size:0.8rem;margin-bottom:1.5rem">Generate dynamic, data-driven PDF reports for RSWF conservation planning, plantation tracking, and SDG project evaluation.</p>
+                    
+                    <div style="margin-bottom:1.25rem">
+                        <div style="font-size:0.85rem;color:#e2e8f0;font-weight:600;margin-bottom:0.5rem">Conservation & Plantation Planning PDF</div>
+                        <button class="btn-primary" style="width:100%;background:linear-gradient(135deg,#10b981,#059669)" onclick="App.downloadConservationReportPdf()">📄 Download Conservation & Plantation Planning Report (PDF)</button>
+                    </div>
+
+                    <div style="margin-top:1rem">
+                        <div style="font-size:0.85rem;color:#e2e8f0;font-weight:600;margin-bottom:0.5rem">SDG & Project Summary PDF</div>
+                        <button class="btn-primary" style="width:100%;background:linear-gradient(135deg,#3b82f6,#1d4ed8)" onclick="App.downloadSdgReportPdf()">📊 Download SDG & Project Summary Report (PDF)</button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<!-- Planted Plant Create / Edit Modal -->
+<div id="plant-modal" class="modal-backdrop" style="display:none">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 id="plant-modal-title">Add New Planted Plant Record</h3>
+            <button class="modal-close" onclick="App.closePlantModal()">×</button>
+        </div>
+
+        <form id="plant-form" onsubmit="App.handlePlantFormSubmit(event)">
+            <div class="form-group">
+                <label>Plant Code / ID (Required, e.g. PL001)</label>
+                <input type="text" id="form-plant-code" required placeholder="e.g. PL001">
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div class="form-group">
+                    <label>Scientific Name</label>
+                    <input type="text" id="form-scientific-name" placeholder="e.g. Ficus religiosa">
+                </div>
+                <div class="form-group">
+                    <label>Common Name</label>
+                    <input type="text" id="form-common-name" placeholder="e.g. Sacred Fig / Peepal">
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div class="form-group">
+                    <label>Planting Date</label>
+                    <input type="date" id="form-planted-on">
+                </div>
+                <div class="form-group">
+                    <label>Health Condition Status</label>
+                    <select id="form-status" required>
+                        <option value="Alive">Alive</option>
+                        <option value="Dead">Dead</option>
+                        <option value="Unknown">Unknown</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div class="form-group">
+                    <label>WGS84 Latitude (Required)</label>
+                    <input type="number" step="any" id="form-latitude" required placeholder="e.g. 18.5195">
+                </div>
+                <div class="form-group">
+                    <label>WGS84 Longitude (Required)</label>
+                    <input type="number" step="any" id="form-longitude" required placeholder="e.g. 73.7800">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Zone Assignment (Optional - Auto-computed from boundary)</label>
+                <select id="form-zone-code">
+                    <option value="">Auto-Assign from Geofence</option>
+                    <option value="ZONE A">ZONE A</option>
+                    <option value="ZONE B">ZONE B</option>
+                    <option value="ZONE C">ZONE C</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Observation Notes</label>
+                <textarea id="form-notes" rows="2" placeholder="Plantation height, health condition notes..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Plant Photograph (Optional File Attachment)</label>
+                <input type="file" id="form-plant-photo-file" accept=".jpg,.jpeg,.png,.webp" style="padding:0.5rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;color:#fff;width:100%">
+                <input type="hidden" id="form-photo-url">
+                <div id="plant-photo-gps-badge" style="display:none;font-size:0.75rem;color:#10b981;margin-top:0.35rem;padding:0.35rem 0.6rem;background:rgba(16,185,129,0.1);border-radius:4px"></div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1.5rem">
+                <button type="button" class="btn-action" onclick="App.closePlantModal()">Cancel</button>
+                <button type="submit" class="btn-primary">Save Plant Record</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- NGO Field Sighting Modal -->
+<div id="ngo-obs-modal" class="modal-backdrop" style="display:none">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3>Add NGO Field Sighting</h3>
+            <button class="modal-close" onclick="App.closeNgoObsModal()">×</button>
+        </div>
+
+        <form id="ngo-obs-form" onsubmit="App.handleNgoObsSubmit(event)">
+            <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:1.25rem">
+                <b>Field Guidance:</b> An <i>NGO Field Sighting</i> represents a wild or naturally occurring plant/species observed in Van Udyan by the field team (distinct from RSWF planted trees).
+            </p>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div class="form-group">
+                    <label>Scientific Name</label>
+                    <input type="text" id="ngo-scientific-name" placeholder="e.g. Azadirachta indica">
+                </div>
+                <div class="form-group">
+                    <label>Common Name</label>
+                    <input type="text" id="ngo-common-name" placeholder="e.g. Neem Tree">
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div class="form-group">
+                    <label>Observed On Date</label>
+                    <input type="date" id="ngo-observed-on">
+                </div>
+                <div class="form-group">
+                    <label>Observer Name</label>
+                    <input type="text" id="ngo-observer" value="RSWF NGO Team">
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div class="form-group">
+                    <label>WGS84 Latitude (Required)</label>
+                    <input type="number" step="any" id="ngo-latitude" required placeholder="e.g. 18.5195">
+                </div>
+                <div class="form-group">
+                    <label>WGS84 Longitude (Required)</label>
+                    <input type="number" step="any" id="ngo-longitude" required placeholder="e.g. 73.7800">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Observation Notes</label>
+                <textarea id="ngo-notes" rows="2" placeholder="Field observation notes..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Sighting Photograph (Optional File Attachment)</label>
+                <input type="file" id="ngo-photo-file" accept=".jpg,.jpeg,.png,.webp" style="padding:0.5rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;color:#fff;width:100%">
+                <input type="hidden" id="ngo-photo-url">
+                <div id="ngo-photo-gps-badge" style="display:none;font-size:0.75rem;color:#10b981;margin-top:0.35rem;padding:0.35rem 0.6rem;background:rgba(16,185,129,0.1);border-radius:4px"></div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1.5rem">
+                <button type="button" class="btn-action" onclick="App.closeNgoObsModal()">Cancel</button>
+                <button type="submit" class="btn-primary" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8)">Save NGO Sighting</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Geotagged Photo Upload Modal (EXIF & Image Geotag) -->
+<div id="upload-photo-modal" class="modal-backdrop" style="display:none">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3>Upload Geotagged Biodiversity Photo</h3>
+            <button class="modal-close" onclick="App.closeUploadPhotoModal()">×</button>
+        </div>
+
+        <form id="upload-photo-form" onsubmit="App.handlePhotoUploadSubmit(event)">
+            <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:1.25rem">
+                Upload a field photograph. GPS coordinates will be detected automatically from <b>photo metadata (EXIF)</b> or a <b>visible image geotag overlay</b> and verified within the Van Udyan site boundary.
+            </p>
+
+            <div class="form-group">
+                <label>Select Plant Photo (JPG, PNG, WEBP — Max 10MB)</label>
+                <input type="file" id="upload-photo-file" accept=".jpg,.jpeg,.png,.webp" required class="search-input" style="width:100%" onchange="App.handlePhotoSelectionChanged(event)">
+                <div id="upload-file-info" style="display:none;margin-top:0.5rem;font-size:0.8rem;color:#10b981"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Plant Organ Classification (For AI Species Suggestions)</label>
+                <select id="upload-organ-select" class="select-input" style="width:100%">
+                    <option value="auto">Auto-detect Organ (Recommended)</option>
+                    <option value="leaf">Leaf</option>
+                    <option value="flower">Flower</option>
+                    <option value="fruit">Fruit</option>
+                    <option value="bark">Bark / Stem</option>
+                    <option value="habit">Habit / Whole Plant</option>
+                </select>
+            </div>
+
+            <div id="upload-status-indicator" style="display:none;margin-top:1rem;padding:0.75rem;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:6px;color:#60a5fa;font-size:0.85rem">
+                ⏳ Detecting GPS from photo metadata or visible image geotag...
+            </div>
+
+            <div id="upload-result-card" style="display:none;margin-top:1rem;padding:1rem;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:6px;color:#e2e8f0;font-size:0.85rem">
+                <div style="font-weight:600;color:#10b981;margin-bottom:0.5rem" id="upload-result-title">✅ Photo Observation Created!</div>
+                <div id="upload-result-details"></div>
+                <img id="upload-result-preview" style="max-height:150px;border-radius:6px;margin-top:0.75rem;display:none;border:1px solid var(--border-color)">
+                
+                <!-- Visible Geotag User Confirmation Action Box -->
+                <div id="geotag-confirmation-box" style="display:none;margin-top:0.75rem;padding:0.75rem;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:6px">
+                    <div style="font-weight:700;color:#fbbf24;margin-bottom:0.3rem">⚠️ Location Confirmation Required</div>
+                    <div style="font-size:0.8rem;color:#cbd5e1;margin-bottom:0.6rem">These coordinates were extracted from the visible geotag overlay printed on the photograph. Please confirm to verify and save this Van Udyan spatial observation.</div>
+                    <button type="button" id="btn-confirm-location" class="btn-primary" style="background:#f59e0b;color:#0f172a;font-weight:700;font-size:0.8rem;padding:0.45rem 0.9rem" onclick="App.handleConfirmGeotagLocation()">Confirm Location</button>
+                </div>
+
+                <!-- Pl@ntNet Trigger Button inside Upload Card -->
+                <div id="upload-ai-trigger-container" style="display:none;margin-top:1rem;padding-top:0.75rem;border-top:1px dashed var(--border-color);justify-content:space-between;align-items:center">
+                    <span style="font-size:0.8rem;color:#94a3b8">Ready for AI Identification?</span>
+                    <button type="button" id="btn-trigger-ai" class="btn-primary" style="background:linear-gradient(135deg,#10b981,#059669);font-size:0.8rem;padding:0.4rem 0.8rem" onclick="App.triggerCurrentObsAI()">🤖 Run Pl@ntNet AI</button>
+                </div>
+            </div>
+
+            <!-- Pl@ntNet AI Predictions Display Section (Phase 10) -->
+            <div id="ai-prediction-card" style="display:none;margin-top:1rem;padding:1rem;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:6px;color:#e2e8f0;font-size:0.85rem">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                    <div style="font-weight:600;color:#a78bfa;font-size:0.95rem">🤖 Pl@ntNet AI Species Suggestions</div>
+                    <span class="status-badge" style="background:rgba(139,92,246,0.2);color:#c084fc;border:1px solid rgba(139,92,246,0.4)">Pending Human Verification</span>
+                </div>
+
+                <div id="ai-predictions-list"></div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1.5rem">
+                <button type="button" class="btn-action" onclick="App.closeUploadPhotoModal()">Close</button>
+                <button type="submit" id="btn-upload-submit" class="btn-primary" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9)">Upload & Verify GPS</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Plant Condition Monitoring Modal (Phase 12) -->
+<div id="plant-monitoring-modal" class="modal-backdrop" style="display:none">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3>Log Plant Condition Monitoring Visit</h3>
+            <button class="modal-close" onclick="App.closeMonitoringModal()">×</button>
+        </div>
+
+        <form id="plant-monitoring-form" onsubmit="App.handleMonitoringSubmit(event)">
+            <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:1rem" id="monitoring-plant-subtitle">Log a field inspection visit record for plant.</p>
+
+            <div class="form-group">
+                <label>Plant Condition Status (Required)</label>
+                <select id="mon-status" required class="select-input" style="width:100%">
+                    <option value="Alive">💚 Alive (Healthy / Growing)</option>
+                    <option value="Dead">⚠️ Dead (Dry / Withered)</option>
+                    <option value="Unknown">❓ Unknown (Unverified / Tag Missing)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Inspection Date (ISO YYYY-MM-DD)</label>
+                <input type="date" id="mon-date" required class="search-input" style="width:100%">
+            </div>
+
+            <div class="form-group">
+                <label>Inspector / Observer Name</label>
+                <input type="text" id="mon-observer" value="RSWF Field Team" class="search-input" style="width:100%">
+            </div>
+
+            <div class="form-group">
+                <label>Field Notes / Health Remarks</label>
+                <textarea id="mon-notes" rows="3" placeholder="Foliage condition, sapling height, water availability notes..." class="search-input" style="width:100%"></textarea>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1.5rem">
+                <button type="button" class="btn-action" onclick="App.closeMonitoringModal()">Cancel</button>
+                <button type="submit" class="btn-primary" style="background:linear-gradient(135deg,#10b981,#059669)">Save Visit Record</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Plant Monitoring History Timeline Modal (Phase 12) -->
+<div id="plant-history-modal" class="modal-backdrop" style="display:none">
+    <div class="modal-card" style="max-width:650px">
+        <div class="modal-header">
+            <h3 id="history-modal-title">📋 Plant Monitoring History</h3>
+            <button class="modal-close" onclick="App.closePlantHistoryModal()">×</button>
+        </div>
+
+        <div style="margin-bottom:1rem">
+            <p style="color:#94a3b8;font-size:0.85rem" id="history-plant-subtitle"></p>
+        </div>
+
+        <div class="table-card" style="max-height:350px;overflow-y:auto">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Visit Date</th>
+                        <th>Condition Status</th>
+                        <th>Inspector</th>
+                        <th>Field Notes</th>
+                    </tr>
+                </thead>
+                <tbody id="history-table-body">
+                    <tr><td colspan="4" style="text-align:center;padding:1.5rem;">Loading visit history...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:1.25rem">
+            <button type="button" class="btn-action" onclick="App.closePlantHistoryModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Phase 15 — RSWF NGO Admin Authorization Password Modal -->
+<div id="ngo-auth-modal" class="modal-backdrop" style="display:none">
+    <div class="modal-card" style="max-width:450px">
+        <div class="modal-header">
+            <h3>🔒 RSWF NGO Admin Authorization</h3>
+            <button class="modal-close" onclick="App.closeAuthModal()">×</button>
+        </div>
+
+        <form id="ngo-auth-form" onsubmit="App.handleAuthSubmit(event)">
+            <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:1rem">
+                An RSWF NGO editing password is required to perform dataset modifications (editing planted plants, logging condition monitoring visits, or deleting records).
+            </p>
+
+            <div class="form-group">
+                <label>RSWF NGO Administrative Password</label>
+                <input type="password" id="ngo-auth-password" required placeholder="Enter RSWF editing password..." class="search-input" style="width:100%">
+                <div id="auth-error-msg" style="color:#ef4444;font-size:0.8rem;margin-top:0.4rem;display:none"></div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1.5rem">
+                <button type="button" class="btn-action" onclick="App.closeAuthModal()">Cancel</button>
+                <button type="submit" class="btn-primary" style="background:linear-gradient(135deg,#10b981,#059669)">Authorize & Proceed</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Frontend JavaScript Modules -->
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>

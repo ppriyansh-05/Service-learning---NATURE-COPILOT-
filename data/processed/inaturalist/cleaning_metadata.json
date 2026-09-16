@@ -1,0 +1,54 @@
+{
+  "phase": 3,
+  "cleaning_timestamp_utc": "2026-09-02T11:33:31.512418Z",
+  "input_dataset": "data\\processed\\inaturalist\\observations_van_udyan.csv",
+  "output_dataset": "data\\processed\\inaturalist\\observations_van_udyan_clean.csv",
+  "accounting": {
+    "input_record_count": 227,
+    "output_record_count": 227,
+    "duplicates_detected": 0,
+    "spatial_failures_detected": 0,
+    "records_removed_count": 0,
+    "records_removed_details": []
+  },
+  "missing_value_analysis": {
+    "before_cleaning": {
+      "taxon_id": 4,
+      "species_name": 4,
+      "scientific_name": 4,
+      "common_name": 4,
+      "taxon_rank": 4,
+      "latitude": 0,
+      "longitude": 0,
+      "observed_on": 1,
+      "quality_grade": 0,
+      "observer": 0,
+      "photo_url": 3,
+      "zone": 104,
+      "zone_status": 0
+    },
+    "after_cleaning": {
+      "taxon_id": 4,
+      "species_name": 4,
+      "scientific_name": 4,
+      "common_name": 4,
+      "taxon_rank": 4,
+      "latitude": 0,
+      "longitude": 0,
+      "observed_on": 1,
+      "quality_grade": 0,
+      "observer": 0,
+      "photo_url": 3,
+      "zone": 104,
+      "zone_status": 0
+    }
+  },
+  "transformations_applied": [
+    "Standardized observation_id and taxon_id to clean integer strings",
+    "Trimmed whitespace and replaced float NaN/null representations with empty strings",
+    "Standardized observed_on date representation to YYYY-MM-DD format",
+    "Re-validated spatial containment against WGS84 Van Udyan boundary geometry",
+    "Re-validated zone assignments (ZONE A, B, C or OUTSIDE_ACTIVE_ZONES)",
+    "Enforced source = 'iNaturalist' data lineage"
+  ]
+}

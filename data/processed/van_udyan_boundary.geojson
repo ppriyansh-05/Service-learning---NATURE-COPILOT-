@@ -1,0 +1,79 @@
+{
+  "type": "FeatureCollection",
+  "name": "Bavdhan_Van_Udyan_Boundary",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "VAN UDHYAN",
+        "site_name": "Bavdhan Van Udyan",
+        "plus_code": "GQ9J+74Q",
+        "address": "Lantana Gardens, Bavdhan, Pune, Maharashtra 411021",
+        "crs": "EPSG:4326",
+        "type": "complete_boundary",
+        "description": "Complete geographical boundary of Bavdhan Van Udyan project area"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              73.780154,
+              18.5179986
+            ],
+            [
+              73.7809286,
+              18.5179152
+            ],
+            [
+              73.7813422,
+              18.5179681
+            ],
+            [
+              73.7810273,
+              18.5185775
+            ],
+            [
+              73.780178,
+              18.5199608
+            ],
+            [
+              73.7797949,
+              18.5200349
+            ],
+            [
+              73.7790106,
+              18.5201137
+            ],
+            [
+              73.778825,
+              18.5197132
+            ],
+            [
+              73.7788931,
+              18.5194341
+            ],
+            [
+              73.7789881,
+              18.5191727
+            ],
+            [
+              73.7791256,
+              18.5190175
+            ],
+            [
+              73.780154,
+              18.5179986
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+# Environment variables and secrets (CRITICAL - DO NOT COMMIT)
+.env
+*.env
+backend/.env
+backend/**/.env
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Python caches and bytecode
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Uploaded test/temporary media & data caches (keep directory structure)
+data/uploads/*
+!data/uploads/.gitkeep
+backend/uploads/*
+!backend/uploads/.gitkeep

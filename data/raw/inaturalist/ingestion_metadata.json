@@ -1,0 +1,22 @@
+{
+  "ingestion_timestamp_utc": "2026-09-02T11:19:40.395320Z",
+  "phase": 2,
+  "source_platform": "iNaturalist",
+  "api_metadata": {
+    "api_endpoint": "https://api.inaturalist.org/v1/observations",
+    "authentication_required": false,
+    "bbox": {
+      "swlat": 18.5149152,
+      "swlng": 73.775825,
+      "nelat": 18.5231137,
+      "nelng": 73.7843422
+    },
+    "pages_requested": 2,
+    "total_results_reported": 331,
+    "total_retrieved": 331,
+    "execution_time_seconds": 7.35,
+    "errors_or_warnings": []
+  },
+  "boundary_source_file": "data\\raw\\van_udyan_boundary.geojson",
+  "zones_source_file": "data\\raw\\van_udyan_zones.geojson"
+}

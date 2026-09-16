@@ -1,0 +1,184 @@
+{
+  "type": "FeatureCollection",
+  "name": "Bavdhan_Van_Udyan_Active_Zones",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "ZONE A",
+        "site_name": "Bavdhan Van Udyan",
+        "plus_code": "GQ9J+74Q",
+        "address": "Lantana Gardens, Bavdhan, Pune, Maharashtra 411021",
+        "crs": "EPSG:4326",
+        "type": "active_monitoring_zone",
+        "status": "active",
+        "description": "Current RSWF active intervention/monitoring work zone ZONE A"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              73.7806449,
+              18.5185488
+            ],
+            [
+              73.7804188,
+              18.5188288
+            ],
+            [
+              73.7802157,
+              18.5187631
+            ],
+            [
+              73.7800515,
+              18.5186325
+            ],
+            [
+              73.7801884,
+              18.5184504
+            ],
+            [
+              73.7802957,
+              18.5182848
+            ],
+            [
+              73.7806449,
+              18.5185488
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "ZONE B",
+        "site_name": "Bavdhan Van Udyan",
+        "plus_code": "GQ9J+74Q",
+        "address": "Lantana Gardens, Bavdhan, Pune, Maharashtra 411021",
+        "crs": "EPSG:4326",
+        "type": "active_monitoring_zone",
+        "status": "active",
+        "description": "Current RSWF active intervention/monitoring work zone ZONE B"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              73.7803587,
+              18.5189196
+            ],
+            [
+              73.7802565,
+              18.5190526
+            ],
+            [
+              73.7798861,
+              18.5188052
+            ],
+            [
+              73.7799585,
+              18.5187159
+            ],
+            [
+              73.7800376,
+              18.5186483
+            ],
+            [
+              73.7802257,
+              18.518796
+            ],
+            [
+              73.7803988,
+              18.5188495
+            ],
+            [
+              73.7803587,
+              18.5189196
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "ZONE C",
+        "site_name": "Bavdhan Van Udyan",
+        "plus_code": "GQ9J+74Q",
+        "address": "Lantana Gardens, Bavdhan, Pune, Maharashtra 411021",
+        "crs": "EPSG:4326",
+        "type": "active_monitoring_zone",
+        "status": "active",
+        "description": "Current RSWF active intervention/monitoring work zone ZONE C"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              73.7798735,
+              18.5188197
+            ],
+            [
+              73.7802131,
+              18.519047
+            ],
+            [
+              73.78026,
+              18.5190722
+            ],
+            [
+              73.7801782,
+              18.5191864
+            ],
+            [
+              73.7800924,
+              18.519308
+            ],
+            [
+              73.7800217,
+              18.5193754
+            ],
+            [
+              73.7799592,
+              18.5194556
+            ],
+            [
+              73.7798367,
+              18.5195956
+            ],
+            [
+              73.7797595,
+              18.5192373
+            ],
+            [
+              73.7797866,
+              18.5189799
+            ],
+            [
+              73.7797826,
+              18.5189102
+            ],
+            [
+              73.7798214,
+              18.5188545
+            ],
+            [
+              73.7798735,
+              18.5188197
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
