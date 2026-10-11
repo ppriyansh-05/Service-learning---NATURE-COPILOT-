@@ -457,6 +457,15 @@ class ApiService {
         const url = window.APP_CONFIG.getEndpoint('/reports/sdg.pdf');
         this.triggerDownload(url, "van_udyan_sdg_project_report.pdf");
     }
+
+    // NGO Approved Species List (Sacred Grove / Devrai Foundation)
+    static getNgoApprovedSpecies() {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint('/species/ngo-approved'));
+    }
+
+    static checkSpeciesInNgoList(scientificName) {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint(`/species/ngo-check?scientific_name=${encodeURIComponent(scientificName)}`));
+    }
 }
 
 window.ApiService = ApiService;

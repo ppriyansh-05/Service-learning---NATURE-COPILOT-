@@ -2,6 +2,10 @@
 Pl@ntNet AI Plant Identification Service Module
 Provides integration with Pl@ntNet REST API for plant species identification from field photos,
 normalizes Top 3 predictions, calculates confidence thresholds, and handles API errors securely.
+
+Predictions are automatically cross-checked against the NGO-approved species list
+(Sacred Grove Plant List v2 — Devrai Foundation, Bavdhan Van Udyan) so the UI can
+immediately flag any PlantNet result that was never purchased or planned for this site.
 """
 
 import os
@@ -12,6 +16,7 @@ from typing import Dict, Any, List, Optional
 import requests
 from PIL import Image, ImageOps
 from app.core.config import settings
+from app.services import ngo_species_service
 
 # Fraction of the photo height covered by a GPS Map Camera style overlay box at the bottom
 GEOTAG_OVERLAY_FRACTION = 0.22
@@ -159,6 +164,17 @@ class PlantNetService:
                     "confidence_level": conf_level
                 })
 
+            # --- NGO species filter ---
+            # Annotate every prediction with whether it's in the Devrai Foundation
+            # approved species list. If PlantNet suggests a species not purchased
+            # by the NGO, it's almost certainly not what's planted at this site.
+            ngo_species_service.annotate_predictions(predictions)
+
+            # Best NGO-approved prediction (highest confidence that is in the list)
+            best_ngo = next(
+                (p for p in predictions if p.get("in_ngo_list")), None
+            )
+
             return {
                 "success": True,
                 "provider": "Pl@ntNet",
@@ -167,6 +183,8 @@ class PlantNetService:
                 "geotag_overlay_removed": crop_geotag_overlay,
                 "total_predictions": len(predictions),
                 "top_prediction": predictions[0] if predictions else None,
+                "best_ngo_prediction": best_ngo,
+                "ngo_filter_applied": True,
                 "predictions": predictions
             }
 

@@ -1876,6 +1876,26 @@ const App = {
             }
 
             let html = "";
+
+            // --- NGO Best-Match Banner ---
+            if (res.best_ngo_prediction) {
+                const b = res.best_ngo_prediction;
+                html += `
+                    <div style="margin-bottom:1rem;padding:0.75rem 1rem;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:8px;display:flex;align-items:center;gap:0.6rem">
+                        <span style="font-size:1.25rem">🌿</span>
+                        <div>
+                            <div style="font-weight:700;color:#34d399;font-size:0.9rem">Best NGO-List Match: <em>${b.scientific_name}</em>${b.marathi_name ? ` — ${b.marathi_name}` : ''}</div>
+                            <div style="color:#6ee7b7;font-size:0.78rem">${b.ngo_note || ''} &nbsp;·&nbsp; Confidence: ${b.confidence_percentage}</div>
+                        </div>
+                    </div>`;
+            } else {
+                html += `
+                    <div style="margin-bottom:1rem;padding:0.65rem 1rem;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);border-radius:8px;display:flex;align-items:center;gap:0.6rem">
+                        <span style="font-size:1.1rem">⚠️</span>
+                        <div style="color:#fcd34d;font-size:0.82rem"><b>None of the top predictions match the NGO species list.</b><br>The plant may not have been identified correctly, or it is not a species purchased for this site.</div>
+                    </div>`;
+            }
+
             res.predictions.forEach(p => {
                 let badgeColor = "#ef4444"; // LOW
                 let badgeBg = "rgba(239, 68, 68, 0.2)";
@@ -1887,13 +1907,19 @@ const App = {
                     badgeBg = "rgba(245, 158, 11, 0.2)";
                 }
 
+                // NGO filter badge
+                const ngoBadge = p.in_ngo_list
+                    ? `<span title="${this.esc(p.ngo_note || '')}" style="display:inline-flex;align-items:center;gap:0.25rem;background:rgba(16,185,129,0.18);color:#34d399;border:1px solid rgba(16,185,129,0.45);border-radius:20px;padding:0.15rem 0.55rem;font-size:0.7rem;font-weight:700;margin-left:0.4rem">✅ NGO List${p.marathi_name ? ' · ' + this.esc(p.marathi_name) : ''}</span>`
+                    : `<span title="This species was not purchased or planned for Bavdhan Van Udyan. Treat prediction with caution." style="display:inline-flex;align-items:center;gap:0.25rem;background:rgba(245,158,11,0.15);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);border-radius:20px;padding:0.15rem 0.55rem;font-size:0.7rem;font-weight:700;margin-left:0.4rem">⚠️ Not in NGO List</span>`;
+
                 html += `
-                    <div style="margin-bottom:0.75rem;padding:0.75rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px">
-                        <div style="display:flex;justify-content:space-between;align-items:center">
-                            <div>
+                    <div style="margin-bottom:0.75rem;padding:0.75rem;background:rgba(255,255,255,0.03);border:1px solid ${p.in_ngo_list ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.08)'};border-radius:6px${p.in_ngo_list ? ';box-shadow:0 0 0 1px rgba(16,185,129,0.1) inset' : ''}">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.3rem">
+                            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:0.15rem">
                                 <span style="font-weight:700;color:#c084fc">#${p.rank}</span>
                                 <span style="font-weight:600;color:#fff;margin-left:0.4rem">${p.scientific_name}</span>
                                 ${p.common_name ? `<span style="color:#94a3b8;font-size:0.8rem"> (${p.common_name})</span>` : ''}
+                                ${ngoBadge}
                             </div>
                             <span class="status-badge" style="background:${badgeBg};color:${badgeColor};font-size:0.75rem">${p.confidence_level} (${p.confidence_percentage})</span>
                         </div>
@@ -1901,6 +1927,9 @@ const App = {
                         <div style="margin-top:0.4rem;background:rgba(255,255,255,0.1);height:6px;border-radius:3px;overflow:hidden">
                             <div style="width:${p.confidence_percentage};background:${badgeColor};height:100%"></div>
                         </div>
+
+                        ${p.in_ngo_list && p.ngo_note ? `<div style="margin-top:0.35rem;font-size:0.75rem;color:#6ee7b7;opacity:0.85">${this.esc(p.ngo_note)}</div>` : ''}
+                        ${!p.in_ngo_list ? `<div style="margin-top:0.35rem;font-size:0.75rem;color:#fcd34d;opacity:0.85">⚠️ Not in NGO list — this species was not purchased for Bavdhan Van Udyan. Confirm only if you're certain.</div>` : ''}
 
                         <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:0.6rem">
                             <button type="button" class="btn-action" style="font-size:0.75rem;padding:0.25rem 0.5rem;background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.4)" 
@@ -1939,6 +1968,7 @@ const App = {
             `;
 
             aiList.innerHTML = html;
+
 
         } catch (err) {
             btnTrigger.disabled = false;
