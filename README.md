@@ -11,39 +11,33 @@ A web dashboard and API that bring together public iNaturalist records, RSWF's p
 | | |
 | :--- | :--- |
 | **Site** | Bavdhan Van Udyan, Lantana Gardens, Bavdhan, Pune, Maharashtra 411021 (Plus Code `GQ9J+74Q`) |
-| **Project area** | ≈ 3.58 ha outer boundary, with three RSWF work zones (A, B, C) covering ≈ 0.55 ha |
-| **Data (28 Sep 2026)** | 270 observations · 99 species & taxa · 227 iNaturalist records · 43 RSWF field uploads · 3 planted plants |
+| **Project Area** | ≈ 3.58 ha outer boundary, with three active RSWF work zones (A, B, C) covering ≈ 0.55 ha |
+| **Data Baseline** | 227 verified iNaturalist records · 88 unique species · 0 synthetic/fabricated records (clean data baseline) |
 | **Partner** | Reform Social Welfare Foundation (RSWF), as a Service Learning project |
+| **Engineering Status**| All 23 Phases Completed · Fully Tested · Ready for Field Handover |
 
 ---
 
 ## 🎯 Features
 
-### Dashboard (7 sections)
-- **Overview:** live counts, observations by zone and by data source, the number of field uploads awaiting species review, and rule-based "Areas Requiring Action" suggestions.
-- **Biodiversity Map:** Leaflet map with the site boundary, Zones A/B/C and colour-coded points: 🟢 iNaturalist records, 🟠 RSWF field uploads, 🔵 RSWF planted plants. It has street and satellite base maps, a switch to show or hide each group of points, and a scale bar. Popups show the photo, with a link to full details.
-- **Species Catalogue:** a searchable list of every recorded plant name with how often it was seen.
-- **Observations:** a filterable table (species, zone, quality grade, source) with photo thumbnails and identification status. Clicking a row opens a **details and review panel** with the photo, location source, AI suggestions and notes, where RSWF staff can confirm, pick an AI suggestion, correct the species, flag it for expert review, or re-run the AI.
-- **Monitoring Zones:** per-zone area, observations, species, planted plants with their health (alive, dead, unknown), health-check visits and coverage notes.
-- **Manage Plantations:** add or edit planted plants, log health-check visits with full history, add field sightings and upload geotagged photos.
-- **Downloads & Reports:** CSV and GeoJSON exports (filterable), a complete ZIP package, and two PDF reports: *Conservation & Plantation Planning* and *SDG & Project Summary*.
+### Dashboard (10 Integrated Sections & Tools)
+- **Header Live Widgets:** Live 12-hour IST clock (`Tue, Oct 7 · 10:21:09 PM`) and real-time Open-Meteo Bavdhan weather pill with interactive rainfall popover (7-day rain bars, 3-day forecast, auto-pause alerts when $\ge 5\text{ mm}$ rain falls).
+- **Overview:** Live KPIs, observations by zone and data source, unverified upload count, and dynamic rule-based "Areas Requiring Action".
+- **Biodiversity Map:** Leaflet GIS map with Van Udyan boundary, Zones A/B/C, and source-coded markers (🟢 iNaturalist, 🟠 RSWF Field Uploads, 🔵 RSWF Planted Trees), layer controls, satellite view, and photo popups.
+- **Species Catalogue:** Searchable directory of recorded species with sighting frequency and click-to-view **Species Profile Modal** featuring monthly phenology bar charts, zone distribution badges, and Wikipedia links.
+- **Observations:** Filterable records table with photo thumbnails and detailed review drawer (confirm species, select Pl@ntNet AI prediction, correct taxonomy, or flag for expert review).
+- **Monitoring Zones:** Zone-specific areas, taxa richness, planted tree survival counts (Alive / Dead / Unknown), and habitat notes.
+- **Plant Watering Tracker:** Intelligent watering schedule accounting for species interval and recent local rainfall, with overdue alerts and monsoon pause flags.
+- **Rapid Verification Queue (`#verify`):** Tinder-style deck for rapid field photo reviews using keyboard shortcuts: <kbd>C</kbd> Confirm, <kbd>X</kbd> Correct, <kbd>R</kbd> Mark for Review, <kbd>→</kbd> Skip, <kbd>←</kbd> Prev.
+- **Devrai Plan Compliance (`#compliance`):** 20×20 Sacred Grove master-grid audit engine (400 cells of $10\text{ ft} \times 10\text{ ft}$, 1 acre), interactive visual heatmap, GPS-to-cell mapping, spacing violation detector ($<6\text{ m}$ for large canopies), and CSV audit export.
+- **Manage Plantations:** Add/edit planted saplings, log condition monitoring visits, add field sightings, and **📂 Bulk Upload** up to 50 geotagged photos per batch.
+- **Downloads & Reports:** Dynamic CSV, GeoJSON, and ZIP package export engine, plus two professional ReportLab PDF generators: *Conservation Planning & Decision-Support* and *UN SDG 15 Impact Summary*.
 
-The dashboard works on phones, tablets and desktops.
-
-### Geotagged photo upload
-- **Location:** read from the photo's **GPS data (EXIF)**, or, when that is missing or empty (e.g. WhatsApp copies, or GPS Map Camera without a fix), from the **printed location stamp** using on-device OCR (Windows OCR). The OCR reads the stamp several times with different image clean-ups and accepts a reading only once two passes agree.
-- **Boundary check:** every photo is checked against the Van Udyan boundary, and its zone is assigned automatically. Coordinates read from a printed stamp are shown for the user to confirm.
-- **Duplicate protection:** the same photo, including a re-compressed or re-forwarded copy at the same spot, cannot be recorded twice. Different photos at the same coordinates are allowed but flagged. Files are stored once, named by their content.
-
-### AI plant identification (Pl@ntNet)
-- Uses the **Pl@ntNet API** with the **Indian Subcontinent flora** (7,635 species), falling back to the world flora when there is no match.
-- The GPS Map Camera stamp and map thumbnail are cropped off, and the photo is resized before identification.
-- Returns the top 3 suggestions with confidence levels (High ≥ 90%, Medium 60–89%, Low < 60%). AI results are always suggestions until a person confirms them.
-
-### Data protection
-- **Editing needs the RSWF admin password**, sent as the `X-NGO-Admin-Password` header: adding or editing plants, logging visits, confirming species and deleting records. Viewing, uploading photos and downloads stay open.
-- **iNaturalist records are permanent read-only reference data.**
-- **Verification keeps an audit trail:** reviewer notes are added after, not over, the original upload or import notes.
+### Geotagged Photo Pipeline & Integrity Guards
+- **Location:** Automated EXIF GPS extraction with fallback to Windows OCR / Tesseract for printed GPS camera stamps.
+- **Boundary Containment:** Every photo is validated against the exact Van Udyan boundary polygon.
+- **Proximity & Duplicate Guard:** Prevents duplicate uploads using SHA-256 and perceptual hashing, with a 1-meter proximity warning guard.
+- **Strict Data Hygiene:** Zero fabricated or false data. iNaturalist records are permanently read-only (HTTP 403 Forbidden on edits). Password-protected administration for all record modifications.
 
 ---
 
@@ -204,11 +198,16 @@ Every route below starts with `/api/v1`, except health and photo files. Full int
 | 13 | Biodiversity analytics and action priorities | [phase_13_advanced_analytics.md](./docs/phase_13_advanced_analytics.md) |
 | 14 | Conservation and SDG PDF reports | [phase_14_conservation_report.md](./docs/phase_14_conservation_report.md), [phase_14_1](./docs/phase_14_1_ngo_report_refinement.md) |
 | 15 | Password-protected editing, read-only iNaturalist data | [phase_15_authentication.md](./docs/phase_15_authentication.md) |
-| 16 | Production cleanup | [phase_16_production_cleanup.md](./docs/phase_16_production_cleanup.md) |
+| 16 | Production cleanup & architecture hardening | [phase_16_production_cleanup.md](./docs/phase_16_production_cleanup.md) |
 | 17 | Data entry and photo management | [phase_17_data_entry_photo_management.md](./docs/phase_17_data_entry_photo_management.md) |
-| — | Reliability and field-data improvements: OCR for printed location stamps, duplicate protection, regional flora, bulk import of 36 field photos, observation review panel, responsive redesign, auto-start | [bulk_import_review_2026-09-28.html](./docs/bulk_import_review_2026-09-28.html) |
+| 18 | Production deployment on Render (Docker) + Supabase (PostGIS & Storage) & 12 bug fixes | [DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
+| 19 | Quality-of-life features: Open-Meteo live weather popover, 12-hour IST clock, verification queue, species profiles, 50-photo bulk upload | [PROJECT_TRACKER.md](./PROJECT_TRACKER.md) |
+| 20 | Devrai Sacred Grove master-plan compliance: 20×20 grid audit, spacing warning detection, visual heatmap & CSV audit export | [PROJECT_TRACKER.md](./PROJECT_TRACKER.md) |
+| 21 | Senior backend security hardening pass (OWASP audit, rate limiter, timing attack defense, CSP, request-size limiter, non-root container) | [PROJECT_TRACKER.md](./PROJECT_TRACKER.md) |
+| 22 | Final code polish and tracker synchronization | [PROJECT_TRACKER.md](./PROJECT_TRACKER.md) |
+| 23 | Clean data hygiene baseline reset: 0 synthetic/test records; platform strictly reflects authoritative 227 iNaturalist records | [PROJECT_TRACKER.md](./PROJECT_TRACKER.md) |
 
-Remaining roadmap items (role-based users, production deployment, geoprivacy, impact evaluation) are tracked in [PROJECT_TRACKER.md](./PROJECT_TRACKER.md). The overall architecture is described in [final_system_architecture_and_readiness.md](./docs/final_system_architecture_and_readiness.md).
+Full phase-by-phase execution tracking is documented in [PROJECT_TRACKER.md](./PROJECT_TRACKER.md). The deployment architecture is described in [DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
 ---
 
