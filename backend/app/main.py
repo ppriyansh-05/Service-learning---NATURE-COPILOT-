@@ -181,15 +181,24 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
     include the exception string so the operator can see what broke.
     """
     log.exception("unhandled exception at %s %s", request.method, request.url.path)
+    origin = request.headers.get("origin")
+    cors_headers = {}
+    if origin and (origin in settings.CORS_ORIGINS or "*" in settings.CORS_ORIGINS):
+        cors_headers = {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
     if settings.IS_PRODUCTION:
         return Response(
             content='{"detail":"Internal server error."}',
             status_code=500,
+            headers=cors_headers,
             media_type="application/json",
         )
     return Response(
         content=f'{{"detail":"Internal server error.","error":{repr(str(exc))}}}',
         status_code=500,
+        headers=cors_headers,
         media_type="application/json",
     )
 
