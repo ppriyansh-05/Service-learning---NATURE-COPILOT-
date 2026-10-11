@@ -13,7 +13,8 @@ import time
 from datetime import datetime
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-PYTHON = os.path.join(ROOT, "backend", "venv", "Scripts", "python.exe")
+_VENV_PY = os.path.join(ROOT, "backend", "venv", "Scripts", "python.exe")
+PYTHON = _VENV_PY if os.path.exists(_VENV_PY) else sys.executable
 LOG_DIR = os.path.join(ROOT, "logs")
 RESTART_DELAY_SECONDS = 5
 
