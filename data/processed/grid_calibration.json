@@ -1,0 +1,16 @@
+{
+    "note": "Default calibration: 61m × 61m square centred on Van Udyan centroid, N-aligned. Mentor can edit the four corners from the Plan Compliance tab once the real plot corners are surveyed.",
+    "orientation": "N-aligned",
+    "corners": {
+        "nw": { "lat": 18.51929, "lon": 73.77979 },
+        "ne": { "lat": 18.51929, "lon": 73.78037 },
+        "se": { "lat": 18.51874, "lon": 73.78037 },
+        "sw": { "lat": 18.51874, "lon": 73.77979 }
+    },
+    "grid": { "rows": 20, "cols": 20 },
+    "cell_side_m": 3.048,
+    "spacing_rules": {
+        "large_canopy_min_m": 6.0
+    },
+    "updated_at": "2026-10-07"
+}

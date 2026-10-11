@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS geography_zones (
 CREATE TABLE IF NOT EXISTS taxonomic_taxa (
     id SERIAL PRIMARY KEY,
     taxon_id VARCHAR(50) UNIQUE,
-    scientific_name VARCHAR(255) NOT NULL,
+    scientific_name VARCHAR(255) NOT NULL UNIQUE,
     species_name VARCHAR(255),
     common_name VARCHAR(255),
     taxon_rank VARCHAR(50),

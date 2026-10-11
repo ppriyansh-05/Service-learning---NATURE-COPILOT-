@@ -10,7 +10,8 @@ from app.schemas.schemas import (
     PlantedPlantCreate, PlantedPlantUpdate, PlantedPlantResponse, PaginatedPlantedPlantsResponse,
     PlantMonitoringCreate, PlantMonitoringResponse
 )
-from app.services.data_service import DataService
+from app.services.data_service import DataService, load_planted_plants_store, save_planted_plants_store
+from app.services import watering_service
 from app.core.security import verify_ngo_admin_password
 
 router = APIRouter(prefix="/planted-plants", tags=["Planted Plants CRUD"])
@@ -19,6 +20,57 @@ router = APIRouter(prefix="/planted-plants", tags=["Planted Plants CRUD"])
 def get_plant_survival_statistics():
     """Retrieves dynamic plant survival rate, status counts, and zone-wise mortality analytics."""
     return DataService.get_plant_survival_statistics()
+
+
+@router.get("/watering")
+def get_watering_queue():
+    """
+    Watering reminder queue: every planted plant with its current watering status
+    (overdue / due_soon / ok / skip), sorted most urgent first. Public read-only.
+    """
+    plants = load_planted_plants_store() or []
+    return {
+        "summary": watering_service.watering_overview(plants),
+        "queue": watering_service.compute_watering_queue(plants),
+    }
+
+
+@router.post("/{id}/watered", status_code=status.HTTP_201_CREATED)
+def mark_plant_watered(
+    id: int,
+    on_date: Optional[str] = Query(None, description="ISO date YYYY-MM-DD; defaults to today."),
+    observer: Optional[str] = Query(None, description="Who watered it."),
+    auth: str = Depends(verify_ngo_admin_password),
+):
+    """
+    Mark a planted plant as watered on the given date (defaults to today).
+    Protected: needs the RSWF admin password.
+    """
+    import datetime as _dt
+
+    plants = load_planted_plants_store() or []
+    plant = next((p for p in plants if p.get("id") == id), None)
+    if not plant:
+        raise HTTPException(status_code=404, detail=f"Planted plant {id} not found.")
+
+    try:
+        when = _dt.date.fromisoformat((on_date or "").strip()) if on_date else _dt.date.today()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="on_date must be an ISO date YYYY-MM-DD.")
+    if when > _dt.date.today():
+        raise HTTPException(status_code=400, detail="Cannot mark a plant as watered on a future date.")
+
+    plant["last_watered_on"] = when.isoformat()
+    plant["last_watered_by"] = (observer or "").strip() or plant.get("last_watered_by")
+    save_planted_plants_store(plants)
+    status_dict = watering_service.watering_status_for(plant, _dt.date.today())
+    return {
+        "plant_id": id,
+        "plant_code": plant.get("plant_code"),
+        "last_watered_on": plant["last_watered_on"],
+        "last_watered_by": plant.get("last_watered_by"),
+        "watering": status_dict,
+    }
 
 @router.post("", response_model=PlantedPlantResponse, status_code=status.HTTP_201_CREATED)
 def create_planted_plant(

@@ -23,21 +23,11 @@ def get_conservation_report_json():
 @router.get("/sdg", summary="Get SDG Impact Analysis Report Data (JSON)")
 def get_sdg_report_json():
     """
-    Returns SDG contribution analysis report payload in JSON format.
-    Mapped directly to measurable database records.
+    Returns the SDG contribution analysis payload in JSON format.
+    Mapped directly to live records in the project database.
     """
     try:
-        data = ReportService.get_conservation_report_data()
-        return {
-            "title": "Van Udyan Sustainable Development Goals (SDG) Contribution Report",
-            "metadata": data["metadata"],
-            "sdg_contributions": data["sdg_contributions"],
-            "biodiversity_summary": {
-                "total_recorded_observations": data["biodiversity_overview"]["total_recorded_observations"],
-                "unique_recorded_taxa_count": data["biodiversity_overview"]["unique_recorded_taxa_count"],
-                "active_monitoring_zones": 3
-            }
-        }
+        return ReportService.get_sdg_report_data()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating SDG report: {str(e)}")
 
@@ -62,11 +52,11 @@ def download_conservation_report_pdf():
 @router.get("/sdg.pdf", summary="Download SDG & Project Report (PDF)")
 def download_sdg_report_pdf():
     """
-    Generates and streams multi-page PDF SDG & project report.
-    Content-Type: application/pdf
+    Streams the SDG & Project Impact PDF, generated live from current project data.
+    This is a distinct document from the Conservation & Plantation Planning PDF.
     """
     try:
-        pdf_bytes = ReportService.generate_conservation_report_pdf()
+        pdf_bytes = ReportService.generate_sdg_report_pdf()
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",

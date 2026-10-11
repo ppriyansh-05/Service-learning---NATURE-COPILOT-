@@ -49,3 +49,12 @@ data/uploads/*
 !data/uploads/.gitkeep
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+# Background service logs (scripts/run_services.py)
+logs/
+
+# Cached photo thumbnails (regenerated automatically)
+data/uploads_thumbs/
+
+# Deploy-time frontend override (do not commit)
+frontend/js/config.local.js

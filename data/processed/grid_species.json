@@ -1,0 +1,1620 @@
+{
+  "species": [
+    {
+      "scientific_name": "Mangifera indica",
+      "marathi_name": "Amba",
+      "acronym": "MI",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        1,
+        2,
+        21,
+        22
+      ]
+    },
+    {
+      "scientific_name": "Butea monosperma",
+      "marathi_name": "Palas",
+      "acronym": "BM",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        3,
+        4,
+        23,
+        24
+      ]
+    },
+    {
+      "scientific_name": "Bauhinia purpurea",
+      "marathi_name": "Kanchan",
+      "acronym": "BP",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        5,
+        6,
+        25,
+        26
+      ]
+    },
+    {
+      "scientific_name": "Saraca indica",
+      "marathi_name": "Sita Ashok",
+      "acronym": "SI",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        7,
+        8,
+        27,
+        28
+      ]
+    },
+    {
+      "scientific_name": "Cassia fistula",
+      "marathi_name": "Bahava",
+      "acronym": "CF",
+      "type": "Tree",
+      "qty_planned": 6,
+      "canopy": "large",
+      "grid_cells": [
+        9,
+        10,
+        11,
+        12,
+        29,
+        32
+      ]
+    },
+    {
+      "scientific_name": "Michelia champaca",
+      "marathi_name": "Sonchafa",
+      "acronym": "MC",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        13,
+        14,
+        33,
+        34
+      ]
+    },
+    {
+      "scientific_name": "Gmelia arborea",
+      "marathi_name": "Shivan",
+      "acronym": "GA",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        15,
+        16,
+        35,
+        36
+      ]
+    },
+    {
+      "scientific_name": "Lagerstroemia speciosa",
+      "marathi_name": "Tamhan",
+      "acronym": "LS",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        17,
+        18,
+        37,
+        38
+      ]
+    },
+    {
+      "scientific_name": "Terminalia bellerica",
+      "marathi_name": "Beheda",
+      "acronym": "TB",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        19,
+        20,
+        39,
+        40
+      ]
+    },
+    {
+      "scientific_name": "Jasminum malabaricum",
+      "marathi_name": "Kusar",
+      "acronym": "",
+      "type": "Creeper",
+      "qty_planned": 2,
+      "canopy": "small",
+      "grid_cells": [
+        30,
+        31
+      ]
+    },
+    {
+      "scientific_name": "Phyllanthus reticulatus",
+      "marathi_name": "Madhavilata",
+      "acronym": "",
+      "type": "Creeper",
+      "qty_planned": 2,
+      "canopy": "small",
+      "grid_cells": [
+        30,
+        31
+      ]
+    },
+    {
+      "scientific_name": "Terminalia arjuna",
+      "marathi_name": "Arjun",
+      "acronym": "TA",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        41,
+        42,
+        61,
+        62
+      ]
+    },
+    {
+      "scientific_name": "Terminalia elliptica",
+      "marathi_name": "Ain",
+      "acronym": "TE",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        43,
+        44,
+        63,
+        64
+      ]
+    },
+    {
+      "scientific_name": "Terminalia paniculata",
+      "marathi_name": "Kinjal",
+      "acronym": "TP",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        45,
+        46,
+        65,
+        66
+      ]
+    },
+    {
+      "scientific_name": "Bauhinia tomentosa",
+      "marathi_name": "Piwla Kanchan",
+      "acronym": "BT",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "small",
+      "grid_cells": [
+        47,
+        48,
+        67,
+        68
+      ]
+    },
+    {
+      "scientific_name": "Lagerstroemia indica",
+      "marathi_name": "Gulmendi",
+      "acronym": "LI",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "small",
+      "grid_cells": [
+        49,
+        52,
+        69,
+        72
+      ]
+    },
+    {
+      "scientific_name": "Clematis heynei",
+      "marathi_name": "Ranjai",
+      "acronym": "",
+      "type": "Creeper",
+      "qty_planned": 2,
+      "canopy": "small",
+      "grid_cells": [
+        50,
+        51
+      ]
+    },
+    {
+      "scientific_name": "Magnolia grandiflora",
+      "marathi_name": "Kavathi Chafa",
+      "acronym": "MG",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        53,
+        54,
+        73,
+        74
+      ]
+    },
+    {
+      "scientific_name": "Garcinia indica",
+      "marathi_name": "Kokam",
+      "acronym": "GI",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        55,
+        56,
+        75,
+        76
+      ]
+    },
+    {
+      "scientific_name": "Anogeissus latifolia",
+      "marathi_name": "Dhawda",
+      "acronym": "AL",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        57,
+        58,
+        77,
+        78
+      ]
+    },
+    {
+      "scientific_name": "Syzygium jambos",
+      "marathi_name": "Jambhul",
+      "acronym": "SJ",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        59,
+        60,
+        79,
+        80
+      ]
+    },
+    {
+      "scientific_name": "Jasminum auriculatum",
+      "marathi_name": "Jui",
+      "acronym": "",
+      "type": "Creeper",
+      "qty_planned": 2,
+      "canopy": "small",
+      "grid_cells": [
+        70,
+        71
+      ]
+    },
+    {
+      "scientific_name": "Jasminum multiflorum",
+      "marathi_name": "Sayali",
+      "acronym": "",
+      "type": "Creeper",
+      "qty_planned": 2,
+      "canopy": "small",
+      "grid_cells": [
+        70,
+        71
+      ]
+    },
+    {
+      "scientific_name": "Hardwickia binata",
+      "marathi_name": "Anjan",
+      "acronym": "HB",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        81,
+        82,
+        101,
+        102
+      ]
+    },
+    {
+      "scientific_name": "Albizia procera",
+      "marathi_name": "Kinnai",
+      "acronym": "AP",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        83,
+        84,
+        103,
+        104
+      ]
+    },
+    {
+      "scientific_name": "Bridelia retusa",
+      "marathi_name": "Asana",
+      "acronym": "BR",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        85,
+        86,
+        105,
+        106
+      ]
+    },
+    {
+      "scientific_name": "Anacardium occidentale",
+      "marathi_name": "Kaju",
+      "acronym": "AO",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        87,
+        88,
+        107,
+        108
+      ]
+    },
+    {
+      "scientific_name": "Mesua ferrea",
+      "marathi_name": "Naagchafa",
+      "acronym": "MF",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        89,
+        92,
+        109,
+        112
+      ]
+    },
+    {
+      "scientific_name": "Tinospora cordifolia",
+      "marathi_name": "Gulvel",
+      "acronym": "",
+      "type": "Creeper",
+      "qty_planned": 2,
+      "canopy": "small",
+      "grid_cells": [
+        90,
+        91
+      ]
+    },
+    {
+      "scientific_name": "Calophyllum inophyllum",
+      "marathi_name": "Undi",
+      "acronym": "CI",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        93,
+        94,
+        113,
+        114
+      ]
+    },
+    {
+      "scientific_name": "Pongamia pinnata",
+      "marathi_name": "Karanj",
+      "acronym": "AP",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        95,
+        96,
+        115,
+        116
+      ]
+    },
+    {
+      "scientific_name": "Mimusop elengi",
+      "marathi_name": "Bakul",
+      "acronym": "ME",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        97,
+        98,
+        117,
+        118
+      ]
+    },
+    {
+      "scientific_name": "Amoora rohituka",
+      "marathi_name": "Rohitak",
+      "acronym": "AR",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        99,
+        100,
+        119,
+        120
+      ]
+    },
+    {
+      "scientific_name": "Pterospermum xylocarpum",
+      "marathi_name": "Muchkunda",
+      "acronym": "PX",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        101,
+        102,
+        121,
+        122
+      ]
+    },
+    {
+      "scientific_name": "Basella alba",
+      "marathi_name": "Mayalu",
+      "acronym": "",
+      "type": "Creeper",
+      "qty_planned": 2,
+      "canopy": "small",
+      "grid_cells": [
+        110,
+        111
+      ]
+    },
+    {
+      "scientific_name": "Rosa clomacena",
+      "marathi_name": "Veligulab",
+      "acronym": "",
+      "type": "Creeper",
+      "qty_planned": 2,
+      "canopy": "small",
+      "grid_cells": [
+        110,
+        111
+      ]
+    },
+    {
+      "scientific_name": "Lagerstroemia microcarpa",
+      "marathi_name": "Nana",
+      "acronym": "LM",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        121,
+        122,
+        141,
+        142
+      ]
+    },
+    {
+      "scientific_name": "Trema orientalis",
+      "marathi_name": "Ghol",
+      "acronym": "TO",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        123,
+        124,
+        143,
+        144
+      ]
+    },
+    {
+      "scientific_name": "Artocarpus heterophyllus",
+      "marathi_name": "Phanas",
+      "acronym": "AH",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        125,
+        126,
+        145,
+        146
+      ]
+    },
+    {
+      "scientific_name": "Boswellia serrata",
+      "marathi_name": "Salai",
+      "acronym": "BS",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        127,
+        128,
+        147,
+        148
+      ]
+    },
+    {
+      "scientific_name": "Annona reticulata",
+      "marathi_name": "Ramphal",
+      "acronym": "AR",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        129,
+        132,
+        149,
+        152
+      ]
+    },
+    {
+      "scientific_name": "Clitoria ternatea",
+      "marathi_name": "Gokarna",
+      "acronym": "",
+      "type": "Creeper",
+      "qty_planned": 4,
+      "canopy": "small",
+      "grid_cells": [
+        130,
+        131
+      ]
+    },
+    {
+      "scientific_name": "Diospyros paniculata",
+      "marathi_name": "Tembhurni",
+      "acronym": "DP",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        133,
+        134,
+        153,
+        154
+      ]
+    },
+    {
+      "scientific_name": "Drypetes roxburghii",
+      "marathi_name": "Putranjiva",
+      "acronym": "DR",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        135,
+        136,
+        155,
+        156
+      ]
+    },
+    {
+      "scientific_name": "Madhuca latifolia",
+      "marathi_name": "Dakshin Moha",
+      "acronym": "ML",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        137,
+        138,
+        157,
+        158
+      ]
+    },
+    {
+      "scientific_name": "Alstonia scholaris",
+      "marathi_name": "Saptaparni",
+      "acronym": "AS",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        139,
+        140,
+        159,
+        160
+      ]
+    },
+    {
+      "scientific_name": "Abrus precatorius",
+      "marathi_name": "Gunj",
+      "acronym": "",
+      "type": "Creeper",
+      "qty_planned": 4,
+      "canopy": "small",
+      "grid_cells": [
+        150,
+        151
+      ]
+    },
+    {
+      "scientific_name": "Limonia acidissima",
+      "marathi_name": "Kawath",
+      "acronym": "LA",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        161,
+        162,
+        181,
+        182
+      ]
+    },
+    {
+      "scientific_name": "Catunaregam spinosa",
+      "marathi_name": "Gela",
+      "acronym": "PG",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "small",
+      "grid_cells": [
+        163,
+        164,
+        183,
+        184
+      ]
+    },
+    {
+      "scientific_name": "Dendrocalamus strictus",
+      "marathi_name": "Bamboo-Mesh",
+      "acronym": "DS",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        367,
+        368,
+        387,
+        388
+      ]
+    },
+    {
+      "scientific_name": "Nyctanthes arbor-tristis",
+      "marathi_name": "Parijat",
+      "acronym": "NA",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "small",
+      "grid_cells": [
+        167,
+        168,
+        187,
+        188
+      ]
+    },
+    {
+      "scientific_name": "Areca catechu",
+      "marathi_name": "Supari",
+      "acronym": "AC",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        169,
+        172,
+        229,
+        232
+      ]
+    },
+    {
+      "scientific_name": "Elaeagnus conferta",
+      "marathi_name": "Ambulki",
+      "acronym": "",
+      "type": "Creeper",
+      "qty_planned": 2,
+      "canopy": "small",
+      "grid_cells": [
+        170,
+        171
+      ]
+    },
+    {
+      "scientific_name": "Protasparagus racemosus",
+      "marathi_name": "Shatavari",
+      "acronym": "",
+      "type": "Creeper",
+      "qty_planned": 2,
+      "canopy": "small",
+      "grid_cells": [
+        170,
+        171
+      ]
+    },
+    {
+      "scientific_name": "Aegle marmelos",
+      "marathi_name": "Bel",
+      "acronym": "AM",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        173,
+        174,
+        193,
+        194
+      ]
+    },
+    {
+      "scientific_name": "Oroxylum indicum",
+      "marathi_name": "Tetu",
+      "acronym": "OI",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        175,
+        176,
+        195,
+        196
+      ]
+    },
+    {
+      "scientific_name": "Azardirachta indica",
+      "marathi_name": "Kadulimb",
+      "acronym": "AI",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        177,
+        178,
+        197,
+        198
+      ]
+    },
+    {
+      "scientific_name": "Thespesia populnea",
+      "marathi_name": "Bhendi",
+      "acronym": "TP",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        179,
+        180,
+        199,
+        200
+      ]
+    },
+    {
+      "scientific_name": "Cymbopogon citratus",
+      "marathi_name": "Lemon Grass",
+      "acronym": "",
+      "type": "Grass",
+      "qty_planned": 10,
+      "canopy": "small",
+      "grid_cells": [
+        196
+      ]
+    },
+    {
+      "scientific_name": "Stereospermum chelonoides",
+      "marathi_name": "kalagori, kalgari, paadal",
+      "acronym": "SC",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        203,
+        204,
+        223,
+        224
+      ]
+    },
+    {
+      "scientific_name": "Careya congerta",
+      "marathi_name": "Karwand",
+      "acronym": "CC",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        205,
+        206,
+        225,
+        226
+      ]
+    },
+    {
+      "scientific_name": "Crossandra infundibuliformis",
+      "marathi_name": "Aboli",
+      "acronym": "",
+      "type": "Shrub",
+      "qty_planned": 10,
+      "canopy": "small",
+      "grid_cells": [
+        207
+      ]
+    },
+    {
+      "scientific_name": "Murraya exotica",
+      "marathi_name": "Kamini",
+      "acronym": "ME",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "small",
+      "grid_cells": [
+        207,
+        208,
+        227,
+        228
+      ]
+    },
+    {
+      "scientific_name": "Plumbago zeylanica",
+      "marathi_name": "Chitrak",
+      "acronym": "",
+      "type": "Shrub",
+      "qty_planned": 10,
+      "canopy": "small",
+      "grid_cells": [
+        193
+      ]
+    },
+    {
+      "scientific_name": "Hibiscus rosa-sinensis",
+      "marathi_name": "Jaswand",
+      "acronym": "",
+      "type": "Shrub",
+      "qty_planned": 10,
+      "canopy": "small",
+      "grid_cells": [
+        208
+      ]
+    },
+    {
+      "scientific_name": "Vitex negundo",
+      "marathi_name": "Nirgudi",
+      "acronym": "VN",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "small",
+      "grid_cells": [
+        213,
+        214,
+        233,
+        234
+      ]
+    },
+    {
+      "scientific_name": "Jasminum sambac",
+      "marathi_name": "Mogra",
+      "acronym": "",
+      "type": "Shrub",
+      "qty_planned": 10,
+      "canopy": "small",
+      "grid_cells": [
+        214
+      ]
+    },
+    {
+      "scientific_name": "Nerium oleander",
+      "marathi_name": "Kaner",
+      "acronym": "",
+      "type": "Shrub",
+      "qty_planned": 10,
+      "canopy": "small",
+      "grid_cells": [
+        215
+      ]
+    },
+    {
+      "scientific_name": "Pterocarpus marsupium",
+      "marathi_name": "Bija",
+      "acronym": "PM",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        215,
+        216,
+        235,
+        236
+      ]
+    },
+    {
+      "scientific_name": "Heterophragma quadriloculare",
+      "marathi_name": "Waras",
+      "acronym": "HQ",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        217,
+        218,
+        237,
+        238
+      ]
+    },
+    {
+      "scientific_name": "Albizia lebbeck",
+      "marathi_name": "Shirish",
+      "acronym": "AL",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        219,
+        220,
+        239,
+        240
+      ]
+    },
+    {
+      "scientific_name": "Acacia leucophloea",
+      "marathi_name": "Hiwar",
+      "acronym": "AL",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        241,
+        242,
+        261,
+        262
+      ]
+    },
+    {
+      "scientific_name": "Firmiana Colorata",
+      "marathi_name": "Kaushi",
+      "acronym": "AF",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        243,
+        244,
+        263,
+        264
+      ]
+    },
+    {
+      "scientific_name": "Stereospermum suaveolens",
+      "marathi_name": "Paadal",
+      "acronym": "SS",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        245,
+        246,
+        265,
+        266
+      ]
+    },
+    {
+      "scientific_name": "Prosopis cineraria",
+      "marathi_name": "Shami",
+      "acronym": "PC",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        249,
+        252,
+        269,
+        272
+      ]
+    },
+    {
+      "scientific_name": "Jasminum polyanthum",
+      "marathi_name": "Kunda",
+      "acronym": "",
+      "type": "Shrub",
+      "qty_planned": 10,
+      "canopy": "small",
+      "grid_cells": [
+        250
+      ]
+    },
+    {
+      "scientific_name": "Gardenia",
+      "marathi_name": "Anant",
+      "acronym": "",
+      "type": "Shrub",
+      "qty_planned": 15,
+      "canopy": "small",
+      "grid_cells": [
+        251
+      ]
+    },
+    {
+      "scientific_name": "Madhuca longifolia",
+      "marathi_name": "Moha",
+      "acronym": "ML",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        253,
+        254,
+        273,
+        274
+      ]
+    },
+    {
+      "scientific_name": "Dolichandrone falcata",
+      "marathi_name": "Medhshingi",
+      "acronym": "DF",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "small",
+      "grid_cells": [
+        255,
+        256,
+        275,
+        276
+      ]
+    },
+    {
+      "scientific_name": "Schleichera oleosa",
+      "marathi_name": "Kusumb",
+      "acronym": "SO",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        257,
+        258,
+        277,
+        278
+      ]
+    },
+    {
+      "scientific_name": "Careya arborea",
+      "marathi_name": "Kumbh",
+      "acronym": "CA",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        259,
+        260,
+        279,
+        280
+      ]
+    },
+    {
+      "scientific_name": "Tabernaemontana divaricata",
+      "marathi_name": "Tagar",
+      "acronym": "",
+      "type": "Shrub",
+      "qty_planned": 10,
+      "canopy": "small",
+      "grid_cells": [
+        232
+      ]
+    },
+    {
+      "scientific_name": "Vetiveria zizanioides",
+      "marathi_name": "Vaala",
+      "acronym": "VZ",
+      "type": "Shrub",
+      "qty_planned": 10,
+      "canopy": "small",
+      "grid_cells": [
+        370,
+        371
+      ]
+    },
+    {
+      "scientific_name": "Sapindus laurifolius",
+      "marathi_name": "Reetha",
+      "acronym": "SL",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        248,
+        267,
+        268,
+        274
+      ]
+    },
+    {
+      "scientific_name": "Radermachera xylocarpa",
+      "marathi_name": "Khadshingi",
+      "acronym": "RX",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        281,
+        282,
+        301,
+        302
+      ]
+    },
+    {
+      "scientific_name": "Mitragyna parvifolia",
+      "marathi_name": "Kalam",
+      "acronym": "MP",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        283,
+        284,
+        303,
+        304
+      ]
+    },
+    {
+      "scientific_name": "Adenanthera pavonina",
+      "marathi_name": "Ratangunj",
+      "acronym": "AP",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        285,
+        286,
+        305,
+        306
+      ]
+    },
+    {
+      "scientific_name": "Sesbania grandiflora",
+      "marathi_name": "Hadga",
+      "acronym": "SG",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "small",
+      "grid_cells": [
+        287,
+        288,
+        307,
+        308
+      ]
+    },
+    {
+      "scientific_name": "Ficus hispida",
+      "marathi_name": "Dhedumbar",
+      "acronym": "FH",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        282,
+        289,
+        309,
+        312
+      ]
+    },
+    {
+      "scientific_name": "Grewia asiatica",
+      "marathi_name": "Phalsa",
+      "acronym": "GA",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        293,
+        294,
+        313,
+        314
+      ]
+    },
+    {
+      "scientific_name": "Terminalia chebula",
+      "marathi_name": "Hirda",
+      "acronym": "TC",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        215,
+        295,
+        296,
+        316
+      ]
+    },
+    {
+      "scientific_name": "Semecarpus anacardium",
+      "marathi_name": "Bibba",
+      "acronym": "SA",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        297,
+        298,
+        317,
+        318
+      ]
+    },
+    {
+      "scientific_name": "Dillenia indica",
+      "marathi_name": "Karmal",
+      "acronym": "DI",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        299,
+        300,
+        319,
+        320
+      ]
+    },
+    {
+      "scientific_name": "Canna indica + Cyperus alternifolius",
+      "marathi_name": "Canna + Umbrella Palm",
+      "acronym": "",
+      "type": "Shrub",
+      "qty_planned": 20,
+      "canopy": "small",
+      "grid_cells": [
+        310
+      ]
+    },
+    {
+      "scientific_name": "Cocos nucifera",
+      "marathi_name": "Naral",
+      "acronym": "CN",
+      "type": "Tree",
+      "qty_planned": 2,
+      "canopy": "medium",
+      "grid_cells": [
+        310,
+        311
+      ]
+    },
+    {
+      "scientific_name": "Ziziphus mauritiana",
+      "marathi_name": "Ghatbor",
+      "acronym": "ZM",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        321,
+        322,
+        341,
+        342
+      ]
+    },
+    {
+      "scientific_name": "Emblica officinalis",
+      "marathi_name": "Awla",
+      "acronym": "EO",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        323,
+        324,
+        343,
+        344
+      ]
+    },
+    {
+      "scientific_name": "Cordia wallichii",
+      "marathi_name": "Burgund",
+      "acronym": "CW",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        329,
+        332,
+        349,
+        352
+      ]
+    },
+    {
+      "scientific_name": "Barringtonia acutangula",
+      "marathi_name": "Newar",
+      "acronym": "BA",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        333,
+        343,
+        353,
+        354
+      ]
+    },
+    {
+      "scientific_name": "Artocarpus lacucha",
+      "marathi_name": "Buddha Naral",
+      "acronym": "AL",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        335,
+        336,
+        355,
+        356
+      ]
+    },
+    {
+      "scientific_name": "Trichilia connaroides",
+      "marathi_name": "Limbhara",
+      "acronym": "TC",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        337,
+        338,
+        357,
+        358
+      ]
+    },
+    {
+      "scientific_name": "Ailanthus excelsa",
+      "marathi_name": "Maharukh",
+      "acronym": "AE",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        339,
+        340,
+        359,
+        360
+      ]
+    },
+    {
+      "scientific_name": "Ficus arnottiana",
+      "marathi_name": "Payar",
+      "acronym": "FA",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        360,
+        364,
+        383,
+        384
+      ]
+    },
+    {
+      "scientific_name": "Erythrina indica",
+      "marathi_name": "Pangara",
+      "acronym": "EI",
+      "type": "Tree",
+      "qty_planned": 3,
+      "canopy": "large",
+      "grid_cells": [
+        361,
+        381,
+        382
+      ]
+    },
+    {
+      "scientific_name": "Bombax ceiba",
+      "marathi_name": "Katesawar",
+      "acronym": "BC",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        365,
+        366,
+        385,
+        386
+      ]
+    },
+    {
+      "scientific_name": "Erythrina stricta",
+      "marathi_name": "Buchpangara",
+      "acronym": "ES",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        165,
+        166,
+        185,
+        186
+      ]
+    },
+    {
+      "scientific_name": "Erythrina suberosa",
+      "marathi_name": "Raatpangara",
+      "acronym": "ES",
+      "type": "Tree",
+      "qty_planned": 2,
+      "canopy": "large",
+      "grid_cells": [
+        369,
+        389
+      ]
+    },
+    {
+      "scientific_name": "Phoenix sylvestris",
+      "marathi_name": "Shindi",
+      "acronym": "PS",
+      "type": "Tree",
+      "qty_planned": 2,
+      "canopy": "large",
+      "grid_cells": [
+        370,
+        371
+      ]
+    },
+    {
+      "scientific_name": "Bombax pentandra",
+      "marathi_name": "Pandhari Sawar",
+      "acronym": "BP",
+      "type": "Tree",
+      "qty_planned": 2,
+      "canopy": "large",
+      "grid_cells": [
+        372,
+        392
+      ]
+    },
+    {
+      "scientific_name": "Morinda pubescens",
+      "marathi_name": "Bartondi",
+      "acronym": "MP",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "medium",
+      "grid_cells": [
+        373,
+        374,
+        393,
+        394
+      ]
+    },
+    {
+      "scientific_name": "Sterculia urens",
+      "marathi_name": "Pandhruk",
+      "acronym": "SU",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        375,
+        376,
+        395,
+        396
+      ]
+    },
+    {
+      "scientific_name": "Ficus microcarpa",
+      "marathi_name": "Nandruk",
+      "acronym": "FM",
+      "type": "Tree",
+      "qty_planned": 4,
+      "canopy": "large",
+      "grid_cells": [
+        377,
+        378,
+        397,
+        398
+      ]
+    },
+    {
+      "scientific_name": "Ficus religiosa",
+      "marathi_name": "Pimpal",
+      "acronym": "FR",
+      "type": "Tree",
+      "qty_planned": 3,
+      "canopy": "large",
+      "grid_cells": [
+        340,
+        380,
+        399
+      ]
+    },
+    {
+      "scientific_name": "Ficus glomerata",
+      "marathi_name": "Umber",
+      "acronym": "FG",
+      "type": "Tree",
+      "qty_planned": 2,
+      "canopy": "large",
+      "grid_cells": [
+        390,
+        391
+      ]
+    },
+    {
+      "scientific_name": "Caroyeta urens",
+      "marathi_name": "Ardhsupari Palm",
+      "acronym": "CU",
+      "type": "Tree",
+      "qty_planned": 8,
+      "canopy": "medium",
+      "grid_cells": [
+        1,
+        4,
+        362,
+        379
+      ]
+    }
+  ],
+  "canopy_classification": {
+    "large": [
+      "Ailanthus excelsa",
+      "Albizia lebbeck",
+      "Albizia procera",
+      "Alstonia scholaris",
+      "Amoora rohituka",
+      "Anacardium occidentale",
+      "Artocarpus heterophyllus",
+      "Artocarpus lacucha",
+      "Azardirachta indica",
+      "Barringtonia acutangula",
+      "Bombax ceiba",
+      "Bombax pentandra",
+      "Bridelia retusa",
+      "Butea monosperma",
+      "Calophyllum inophyllum",
+      "Cassia fistula",
+      "Cordia wallichii",
+      "Dendrocalamus strictus",
+      "Dillenia indica",
+      "Erythrina indica",
+      "Erythrina stricta",
+      "Erythrina suberosa",
+      "Ficus arnottiana",
+      "Ficus glomerata",
+      "Ficus hispida",
+      "Ficus microcarpa",
+      "Ficus religiosa",
+      "Gmelia arborea",
+      "Hardwickia binata",
+      "Lagerstroemia microcarpa",
+      "Lagerstroemia speciosa",
+      "Madhuca latifolia",
+      "Madhuca longifolia",
+      "Mangifera indica",
+      "Mesua ferrea",
+      "Michelia champaca",
+      "Mimusop elengi",
+      "Phoenix sylvestris",
+      "Pongamia pinnata",
+      "Pterocarpus marsupium",
+      "Saraca indica",
+      "Schleichera oleosa",
+      "Sterculia urens",
+      "Terminalia arjuna",
+      "Terminalia bellerica",
+      "Terminalia chebula",
+      "Terminalia elliptica",
+      "Terminalia paniculata"
+    ],
+    "small": [
+      "Bauhinia tomentosa",
+      "Catunaregam spinosa",
+      "Crossandra infundibuliformis",
+      "Cymbopogon citratus",
+      "Dolichandrone falcata",
+      "Gardenia",
+      "Hibiscus rosa-sinensis",
+      "Jasminum polyanthum",
+      "Jasminum sambac",
+      "Lagerstroemia indica",
+      "Murraya exotica",
+      "Nerium oleander",
+      "Nyctanthes arbor-tristis",
+      "Plumbago zeylanica",
+      "Sesbania grandiflora",
+      "Tabernaemontana divaricata",
+      "Vetiveria zizanioides",
+      "Vitex negundo"
+    ]
+  }
+}

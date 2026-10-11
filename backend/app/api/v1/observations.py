@@ -6,13 +6,14 @@ and provenance protection preventing modification of original iNaturalist record
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status, Response
+from typing import List as _List
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.db.session import get_db
 from app.schemas.schemas import (
     PaginatedObservationsResponse, ObservationResponse, NGOObservationCreate, GeotagLocationConfirmRequest
 )
-from app.services.data_service import DataService
+from app.services.data_service import DataService, DuplicateObservationError
 
 router = APIRouter(prefix="/observations", tags=["Observations"])
 
@@ -59,11 +60,19 @@ def get_observation_detail(id: int, db: Session = Depends(get_db)):
     return record
 
 @router.post("/ngo", response_model=ObservationResponse, status_code=status.HTTP_201_CREATED)
-def create_ngo_observation(obs_data: NGOObservationCreate):
+def create_ngo_observation(
+    obs_data: NGOObservationCreate,
+    allow_nearby_duplicate: bool = Query(
+        False,
+        description="Override the 1 metre same-plant guard (see /observations/upload for details).",
+    ),
+):
     """Create a new NGO-owned field observation record (source = 'NGO / New Upload')."""
     try:
-        record = DataService.create_ngo_observation(obs_data.model_dump())
+        record = DataService.create_ngo_observation(obs_data.model_dump(), allow_nearby_duplicate=allow_nearby_duplicate)
         return record
+    except DuplicateObservationError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e.to_detail())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -71,7 +80,15 @@ def create_ngo_observation(obs_data: NGOObservationCreate):
 async def upload_photo_observation(
     response: Response,
     file: UploadFile = File(...),
-    confirm_location: bool = Query(False, description="Set to true if user confirms visible image geotag coordinates")
+    confirm_location: bool = Query(False, description="Set to true if user confirms visible image geotag coordinates"),
+    allow_nearby_duplicate: bool = Query(
+        False,
+        description=(
+            "By default, uploading a photo within ~1 metre of an existing plant observation is "
+            "rejected as the same plant (409 Conflict). Set true when two plants genuinely grow "
+            "that close together and you want to record the new one anyway."
+        ),
+    ),
 ):
     """
     Upload a plant/biodiversity photo.
@@ -85,7 +102,11 @@ async def upload_photo_observation(
     content_type = file.content_type or "image/jpeg"
 
     try:
-        res = DataService.process_photo_upload(contents, filename, content_type, confirm_location=confirm_location)
+        res = DataService.process_photo_upload(
+            contents, filename, content_type,
+            confirm_location=confirm_location,
+            allow_nearby_duplicate=allow_nearby_duplicate,
+        )
         if not res.get("success"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -97,6 +118,8 @@ async def upload_photo_observation(
 
         return res
 
+    except DuplicateObservationError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e.to_detail())
     except ValueError as e:
         msg = str(e)
         if "exceeds maximum allowed limit" in msg:
@@ -107,7 +130,13 @@ async def upload_photo_observation(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
 @router.post("/confirm-location", status_code=status.HTTP_201_CREATED)
-def confirm_geotag_location(req: GeotagLocationConfirmRequest):
+def confirm_geotag_location(
+    req: GeotagLocationConfirmRequest,
+    allow_nearby_duplicate: bool = Query(
+        False,
+        description="Override the 1 metre same-plant guard (see /observations/upload for details)."
+    ),
+):
     """
     Confirms user-verified coordinates detected from a visible image geotag overlay.
     Validates boundary containment inside Van Udyan and persists the observation.
@@ -119,11 +148,73 @@ def confirm_geotag_location(req: GeotagLocationConfirmRequest):
             longitude=req.longitude,
             observed_on=req.observed_on,
             observer=req.observer,
-            notes=req.notes
+            notes=req.notes,
+            allow_nearby_duplicate=allow_nearby_duplicate,
         )
         return res
+    except DuplicateObservationError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e.to_detail())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/bulk-upload", status_code=status.HTTP_200_OK)
+async def bulk_upload_photos(
+    files: _List[UploadFile] = File(..., description="Up to 50 photos — EXIF/GPS, zone, dedup are run per file"),
+    allow_nearby_duplicate: bool = Query(False, description="Skip the 1 m same-plant guard for every file"),
+):
+    """
+    Batch EXIF/GPS pipeline for a folder-drop of photos.
+    Each file is processed through the same guards as /upload; the response
+    is one row per file so the frontend can render a review grid.
+    Nothing is auto-persisted when GPS confirmation is still pending — the
+    user acts on each row in the UI.
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+    if len(files) > 50:
+        raise HTTPException(status_code=413, detail="At most 50 files per batch")
+
+    import logging as _logging
+    _log = _logging.getLogger("van-udyan.upload")
+
+    results = []
+    for f in files:
+        name = f.filename or "unnamed.jpg"
+        ctype = f.content_type or "image/jpeg"
+        try:
+            contents = await f.read()
+        except Exception as read_err:
+            _log.warning("bulk-upload read failed for %r: %s", name, read_err)
+            results.append({"filename": name, "ok": False, "status": "error", "error": "Could not read upload."})
+            continue
+        try:
+            res = DataService.process_photo_upload(
+                contents, name, ctype,
+                confirm_location=False,
+                allow_nearby_duplicate=allow_nearby_duplicate,
+            )
+            results.append({"filename": name, "ok": True, **res})
+        except DuplicateObservationError as de:
+            results.append({"filename": name, "ok": False, "status": "duplicate", "duplicate": de.to_detail()})
+        except ValueError as ve:
+            # ValueError messages here are the result of our own validators
+            # (file-type / size / boundary / dedup) — safe to surface to the UI.
+            results.append({"filename": name, "ok": False, "status": "rejected", "error": str(ve)})
+        except Exception as ue:  # noqa: BLE001
+            # Everything else: log server-side, never leak the exception to the client.
+            _log.exception("bulk-upload unexpected failure for %r: %s", name, ue)
+            results.append({"filename": name, "ok": False, "status": "error", "error": "Upload failed."})
+
+    summary = {
+        "total": len(files),
+        "ok": sum(1 for r in results if r.get("ok")),
+        "needs_confirmation": sum(1 for r in results if r.get("requires_confirmation")),
+        "duplicates": sum(1 for r in results if r.get("status") == "duplicate"),
+        "rejected": sum(1 for r in results if r.get("status") == "rejected"),
+        "errors": sum(1 for r in results if r.get("status") == "error"),
+    }
+    return {"summary": summary, "results": results}
+
 
 @router.post("/inspect-photo")
 async def inspect_photo_file(file: UploadFile = File(...)):

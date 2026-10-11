@@ -34,6 +34,13 @@ class ObservationResponse(BaseModel):
     longitude: float
     zone: Optional[str] = None
     zone_status: str
+    # NGO field observations: location source and identification review state
+    gps_source: Optional[str] = None
+    notes: Optional[str] = None
+    identification_status: Optional[str] = None
+    identification_confidence: Optional[str] = None
+    verification_notes: Optional[str] = None
+    ai_top_predictions: Optional[List[Dict[str, Any]]] = None
 
 class PaginatedObservationsResponse(BaseModel):
     page: int
@@ -99,6 +106,11 @@ class PlantedPlantCreate(BaseModel):
     zone_code: Optional[str] = Field(None, description="Active zone e.g. ZONE A, ZONE B, ZONE C")
     notes: Optional[str] = Field(None, description="Field observation notes")
     photo_url: Optional[str] = Field(None, description="Plant photo URL reference")
+    watering_interval_days: Optional[int] = Field(
+        None, ge=0, le=365,
+        description="Days between waterings for this plant. 0 = never remind. Omit for the default.",
+    )
+    last_watered_on: Optional[str] = Field(None, description="ISO date of last watering; blank for never watered.")
 
     @field_validator("status")
 
@@ -119,6 +131,8 @@ class PlantedPlantUpdate(BaseModel):
     zone_code: Optional[str] = Field(None, description="Active zone")
     notes: Optional[str] = Field(None, description="Field observation notes")
     photo_url: Optional[str] = Field(None, description="Plant photo URL reference")
+    watering_interval_days: Optional[int] = Field(None, ge=0, le=365, description="Days between waterings. 0 = never.")
+    last_watered_on: Optional[str] = Field(None, description="ISO date of last watering.")
 
     @field_validator("status")
 
@@ -141,6 +155,9 @@ class PlantedPlantResponse(BaseModel):
     zone_code: Optional[str] = None
     notes: Optional[str] = None
     photo_url: Optional[str] = None
+    watering_interval_days: Optional[int] = None
+    last_watered_on: Optional[str] = None
+    last_watered_by: Optional[str] = None
 
 class PaginatedPlantedPlantsResponse(BaseModel):
     page: int

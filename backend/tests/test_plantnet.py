@@ -252,3 +252,62 @@ def test_human_verification_preserves_ai_prediction():
 def test_inaturalist_records_unchanged():
     obs1 = client.get("/api/v1/observations/1").json()
     assert obs1["source"] == "iNaturalist"
+
+# =====================================================================
+# Regional Flora & Photo Preparation
+# =====================================================================
+
+def _mock_response(status_code, payload=None):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = payload or {}
+    return resp
+
+# Regional (Indian Subcontinent) flora is queried by default
+def test_identify_uses_regional_flora(temp_dummy_image):
+    with patch.dict(os.environ, {"PLANTNET_API_KEY": "test_key", "PLANTNET_PROJECT": ""}):
+        os.environ.pop("PLANTNET_PROJECT")
+        with patch("requests.post", return_value=_mock_response(200, MOCK_PLANTNET_SUCCESS_RESPONSE)) as post:
+            res = PlantNetService.identify_plant(temp_dummy_image)
+    assert res["success"] is True
+    assert res["flora_project"] == "k-indian-subcontinent"
+    assert "/v2/identify/k-indian-subcontinent?" in post.call_args[0][0]
+
+# No match in the regional flora -> retried against the world flora
+def test_identify_falls_back_to_world_flora(temp_dummy_image):
+    responses = [_mock_response(404), _mock_response(200, MOCK_PLANTNET_SUCCESS_RESPONSE)]
+    with patch.dict(os.environ, {"PLANTNET_API_KEY": "test_key", "PLANTNET_PROJECT": "k-indian-subcontinent"}):
+        with patch("requests.post", side_effect=responses) as post:
+            res = PlantNetService.identify_plant(temp_dummy_image)
+    assert post.call_count == 2
+    assert "/v2/identify/all?" in post.call_args_list[1][0][0]
+    assert res["success"] is True
+    assert res["flora_project"] == "all"
+
+# No match anywhere -> clear guidance instead of a raw HTTP error
+def test_identify_no_match_message(temp_dummy_image):
+    with patch.dict(os.environ, {"PLANTNET_API_KEY": "test_key"}):
+        with patch("requests.post", return_value=_mock_response(404)):
+            res = PlantNetService.identify_plant(temp_dummy_image)
+    assert res["success"] is False
+    assert res["error_code"] == "NO_MATCH"
+    assert "close-up" in res["message"]
+
+# Geotag overlay box is cropped off and the photo downsized before upload
+def test_prepare_image_removes_geotag_overlay(tmp_path):
+    import io
+    from PIL import Image
+    from app.services.plantnet_service import GEOTAG_OVERLAY_FRACTION, MAX_UPLOAD_DIMENSION
+    img = Image.new("RGB", (2448, 3264), color=(30, 140, 50))
+    img.paste((255, 0, 255), (0, 2700, 2448, 3264))  # magenta "overlay box" at the bottom
+    path = tmp_path / "gpsmap.jpg"
+    img.save(path, "JPEG")
+
+    cropped = Image.open(io.BytesIO(PlantNetService.prepare_image(str(path), crop_geotag_overlay=True)))
+    assert max(cropped.size) == MAX_UPLOAD_DIMENSION
+    assert abs(cropped.height / cropped.width - (3264 * (1 - GEOTAG_OVERLAY_FRACTION)) / 2448) < 0.01
+    r, g, b = cropped.convert("RGB").getpixel((cropped.width // 2, cropped.height - 3))
+    assert g > r and g > b  # bottom edge is plant-green, magenta overlay removed
+
+    uncropped = Image.open(io.BytesIO(PlantNetService.prepare_image(str(path), crop_geotag_overlay=False)))
+    assert abs(uncropped.height / uncropped.width - 3264 / 2448) < 0.01

@@ -216,3 +216,41 @@ def test_inaturalist_total_unchanged():
     obs_res = client.get("/api/v1/observations?source=iNaturalist")
     assert obs_res.status_code == 200
     assert obs_res.json()["total_records"] == 227
+
+
+# Observation list includes NGO field observations (stored outside the DB table) and matches the overview totals
+def test_observation_list_total_matches_statistics():
+    stats = client.get("/api/v1/statistics/overview").json()
+    listing = client.get("/api/v1/observations?limit=1").json()
+    assert listing["total_records"] == stats["total_observations"]
+    for zone in ("ZONE A", "ZONE B", "ZONE C"):
+        z = client.get("/api/v1/observations", params={"limit": 1, "zone": zone}).json()
+        assert z["total_records"] == stats["observations_by_zone"].get(zone, 0)
+
+
+# Confirming a record's suggested species works without an in-session AI run, and keeps earlier notes
+def test_confirm_suggested_species_keeps_provenance_notes():
+    import json as _json
+    from app.services.data_service import get_base_dir
+    store_path = os.path.join(get_base_dir(), "data", "processed", "ngo_observations_store.json")
+    rec = client.post("/api/v1/observations/ngo", json={
+        "scientific_name": "Ficus religiosa", "common_name": "Peepal",
+        "latitude": 18.5184386, "longitude": 73.7802123}).json()
+    with open(store_path, encoding="utf-8") as f:
+        store = _json.load(f)
+    for r in store:
+        if r["id"] == rec["id"]:
+            r["verification_notes"] = "Imported from field folder"
+            r["ai_top_predictions"] = [{"rank": 1, "scientific_name": "Ficus religiosa", "common_name": "Peepal", "confidence_percentage": "36.0%"}]
+    with open(store_path, "w", encoding="utf-8") as f:
+        _json.dump(store, f)
+
+    headers = {"X-NGO-Admin-Password": "rswf-admin-pass"}
+    res = client.post(f"/api/v1/observations/{rec['id']}/verify", headers=headers,
+                      json={"decision": "confirm", "scientific_name": "Ficus religiosa", "notes": "Checked in field"})
+    assert res.status_code == 200, res.text
+    obs = client.get(f"/api/v1/observations/{rec['id']}").json()
+    assert obs["scientific_name"] == "Ficus religiosa"
+    assert obs["identification_status"] == "verified"
+    assert obs["verification_notes"].startswith("Imported from field folder")
+    assert "Checked in field" in obs["verification_notes"]

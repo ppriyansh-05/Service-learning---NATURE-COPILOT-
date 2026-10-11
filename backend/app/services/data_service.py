@@ -13,6 +13,8 @@ import zipfile
 from typing import Dict, Any, List, Optional, Tuple
 from shapely.geometry import shape, Point
 
+from app.services import photo_storage
+
 def get_base_dir():
     current = os.path.dirname(os.path.abspath(__file__))
     return os.path.abspath(os.path.join(current, "..", "..", ".."))
@@ -102,37 +104,290 @@ DEFAULT_PLANTED_PLANTS = [
 ]
 
 def load_planted_plants_store() -> List[Dict[str, Any]]:
+    """
+    Returns the persisted list of RSWF planted plants. An empty list in the
+    store is honoured as a legitimate "no RSWF plantings yet" state — the
+    DEFAULT_PLANTED_PLANTS seed is only used when the file is missing or
+    unreadable, so clearing the store doesn't silently re-create the demo
+    data.
+    """
     store_path = os.path.join(get_base_dir(), "data", "processed", "planted_plants_store.json")
     if not os.path.exists(store_path):
         return list(DEFAULT_PLANTED_PLANTS)
     try:
         with open(store_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-            if not data:
-                return list(DEFAULT_PLANTED_PLANTS)
+        if isinstance(data, list):
             return data
+        return list(DEFAULT_PLANTED_PLANTS)
     except Exception:
         return list(DEFAULT_PLANTED_PLANTS)
 
-def save_planted_plants_store(records: List[Dict[str, Any]]):
+def _write_store(filename: str, records: Any, sync_key: str):
+    """
+    Writes a JSON store under data/processed/, then upserts the same blob into Postgres via
+    state_sync so it survives redeploys on ephemeral hosts. DB sync is a silent no-op in local-only
+    runs (no DATABASE_URL) and in tests.
+    """
     store_dir = os.path.join(get_base_dir(), "data", "processed")
     os.makedirs(store_dir, exist_ok=True)
-    store_path = os.path.join(store_dir, "planted_plants_store.json")
+    store_path = os.path.join(store_dir, filename)
     with open(store_path, "w", encoding="utf-8") as f:
         json.dump(records, f, indent=2)
+    try:
+        from app.services import state_sync
+        state_sync.push(sync_key, records)
+    except Exception:
+        # Never let state sync failures block a user-visible write
+        pass
+
+def save_planted_plants_store(records: List[Dict[str, Any]]):
+    _write_store("planted_plants_store.json", records, "planted_plants")
 
 def save_ngo_observations_store(records: List[Dict[str, Any]]):
-    store_dir = os.path.join(get_base_dir(), "data", "processed")
-    os.makedirs(store_dir, exist_ok=True)
-    store_path = os.path.join(store_dir, "ngo_observations_store.json")
-    with open(store_path, "w", encoding="utf-8") as f:
-        json.dump(records, f, indent=2)
+    _write_store("ngo_observations_store.json", records, "ngo_observations")
+
+_monitoring_hydrated = False
 
 def load_monitoring_store() -> List[Dict[str, Any]]:
+    """
+    Returns the plant-monitoring visits. Hydrates from data/processed/plant_monitoring_store.json
+    on first access, so visits logged in previous runs are still visible after a restart.
+    """
+    global _monitoring_hydrated
+    if not _monitoring_hydrated:
+        _monitoring_hydrated = True
+        store_path = os.path.join(get_base_dir(), "data", "processed", "plant_monitoring_store.json")
+        if os.path.exists(store_path):
+            try:
+                with open(store_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    DataService._plant_monitoring_repository = data
+            except Exception:
+                pass
     return list(DataService._plant_monitoring_repository)
 
 def save_monitoring_store(records: List[Dict[str, Any]]):
+    global _monitoring_hydrated
+    _monitoring_hydrated = True
     DataService._plant_monitoring_repository = list(records)
+    _write_store("plant_monitoring_store.json", records, "plant_monitoring")
+
+# =====================================================================
+# Duplicate Photo Observation Detection
+# =====================================================================
+
+# Max dhash bit difference for two photos to count as the same image (recompressed / re-forwarded copy)
+DUPLICATE_DHASH_MAX_DISTANCE = 6
+# A visually identical photo within this distance of an existing one is the same sighting
+DUPLICATE_SAME_SPOT_METERS = 10.0
+# Within this radius, two different photos are treated as the SAME physical plant by default.
+# A volunteer walking around a tree takes several photos from different angles — we don't want
+# each one to become its own observation. The uploader can override with allow_nearby_duplicate
+# when two plants really do grow this close together (e.g. dense plantings).
+SAME_PLANT_RADIUS_METERS = 1.0
+
+class DuplicateObservationError(ValueError):
+    """
+    Raised when an uploaded photo matches an existing NGO observation.
+
+    Two flavours of match:
+      - `kind="exact"`: the same photo (byte-identical or a near-identical re-encoded copy).
+                        No way around this — the backend always rejects it.
+      - `kind="nearby"`: a different photo taken within SAME_PLANT_RADIUS_METERS of an existing
+                        plant record. The caller can retry with allow_nearby_duplicate=true to
+                        tell the backend "this is really a different plant, record it anyway".
+    """
+
+    def __init__(self, message: str, existing: Dict[str, Any], kind: str = "exact"):
+        super().__init__(message)
+        self.existing = existing
+        self.kind = kind  # "exact" or "nearby"
+
+    def to_detail(self) -> Dict[str, Any]:
+        e = self.existing
+        return {
+            "message": str(self),
+            "duplicate": True,
+            "duplicate_kind": self.kind,
+            "overridable": self.kind == "nearby",
+            "existing_observation_id": e.get("id"),
+            "photo_url": e.get("photo_url"),
+            "latitude": e.get("latitude"),
+            "longitude": e.get("longitude"),
+            "zone": e.get("zone") or "Outside Active Zones",
+            "observed_on": e.get("observed_on"),
+            "scientific_name": e.get("scientific_name"),
+            "identification_status": e.get("identification_status"),
+        }
+
+def load_ngo_observations_store() -> List[Dict[str, Any]]:
+    store_path = os.path.join(get_base_dir(), "data", "processed", "ngo_observations_store.json")
+    if not os.path.exists(store_path):
+        return []
+    try:
+        with open(store_path, "r", encoding="utf-8") as f:
+            return json.load(f) or []
+    except Exception:
+        return []
+
+def resolve_upload_path(photo_url: Optional[str]) -> Optional[str]:
+    """
+    Returns a local file path for the photo referenced by '/uploads/<name>'.
+    - Local-storage mode: returns the file inside the uploads directory.
+    - Supabase-storage mode: downloads the photo into the uploads directory on first use
+      (small cache that survives for the life of the instance), so OCR, fingerprinting and
+      Pl@ntNet can keep working with a local path.
+    Returns None if the URL is malformed or the photo cannot be found.
+    """
+    if not photo_url:
+        return None
+    name = os.path.basename(str(photo_url))
+    if not name.startswith("upload_"):
+        return None
+    local = os.path.join(photo_storage.uploads_dir(), name)
+    if os.path.exists(local):
+        return local
+    if not photo_storage.is_local():
+        data = photo_storage.read_bytes(name)
+        if data is not None:
+            try:
+                with open(local, "wb") as f:
+                    f.write(data)
+                return local
+            except OSError:
+                return None
+    return None
+
+_fingerprint_cache: Dict[Tuple[str, float], Tuple[str, Optional[str]]] = {}
+
+def _record_fingerprint(record: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    """Returns a stored record's (sha256, dhash), computing it from its photo file for older records."""
+    if record.get("photo_sha256"):
+        return record.get("photo_sha256"), record.get("photo_dhash")
+
+    from app.services.exif_service import compute_photo_fingerprint
+    path = resolve_upload_path(record.get("photo_url"))
+    if not path or not os.path.exists(path):
+        return None, None
+    key = (path, os.path.getmtime(path))
+    if key not in _fingerprint_cache:
+        with open(path, "rb") as f:
+            _fingerprint_cache[key] = compute_photo_fingerprint(f.read())
+    return _fingerprint_cache[key]
+
+def distance_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = math.radians(lat2 - lat1), math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+def find_duplicate_photo_observation(
+    ngo_records: List[Dict[str, Any]],
+    sha256_hex: str,
+    dhash_hex: Optional[str],
+    lat: Optional[float] = None,
+    lng: Optional[float] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Finds an existing NGO observation for the same photo:
+    1. Byte-identical file (same SHA-256), regardless of location.
+    2. Visually identical image (dhash within threshold) at the same spot — catches re-compressed copies.
+    """
+    from app.services.exif_service import dhash_distance
+
+    for rec in ngo_records:
+        rec_sha, rec_dhash = _record_fingerprint(rec)
+        if rec_sha and rec_sha == sha256_hex:
+            return rec
+        if lat is None or lng is None or rec.get("latitude") is None or rec.get("longitude") is None:
+            continue
+        if (dhash_distance(dhash_hex, rec_dhash) <= DUPLICATE_DHASH_MAX_DISTANCE
+                and distance_meters(lat, lng, float(rec["latitude"]), float(rec["longitude"])) <= DUPLICATE_SAME_SPOT_METERS):
+            return rec
+    return None
+
+def find_nearby_observation_ids(ngo_records: List[Dict[str, Any]], lat: float, lng: float,
+                                 radius_m: float = SAME_PLANT_RADIUS_METERS) -> List[int]:
+    """IDs of existing NGO observations recorded within radius_m of the given coordinates."""
+    return [
+        rec["id"] for rec in ngo_records
+        if rec.get("latitude") is not None and rec.get("longitude") is not None
+        and distance_meters(lat, lng, float(rec["latitude"]), float(rec["longitude"])) <= radius_m
+    ]
+
+def find_same_plant_observation(ngo_records: List[Dict[str, Any]], lat: float, lng: float) -> Optional[Dict[str, Any]]:
+    """Returns the closest existing NGO observation within SAME_PLANT_RADIUS_METERS, or None."""
+    closest: Optional[Dict[str, Any]] = None
+    closest_d = SAME_PLANT_RADIUS_METERS + 1
+    for rec in ngo_records:
+        if rec.get("latitude") is None or rec.get("longitude") is None:
+            continue
+        d = distance_meters(lat, lng, float(rec["latitude"]), float(rec["longitude"]))
+        if d <= SAME_PLANT_RADIUS_METERS and d < closest_d:
+            closest = rec
+            closest_d = d
+    return closest
+
+def duplicate_observation_error(existing: Dict[str, Any]) -> DuplicateObservationError:
+    return DuplicateObservationError(
+        f"This photo has already been uploaded as Observation #{existing['id']} "
+        f"({existing.get('zone') or 'Outside Active Zones'}, {existing.get('latitude')}, {existing.get('longitude')}). "
+        f"A duplicate observation was not created.",
+        existing,
+        kind="exact",
+    )
+
+def same_plant_error(existing: Dict[str, Any]) -> DuplicateObservationError:
+    name = existing.get("common_name") or existing.get("scientific_name") or "a plant"
+    return DuplicateObservationError(
+        f"A plant ({name}) is already recorded within {SAME_PLANT_RADIUS_METERS:.0f} metre of "
+        f"this spot as Observation #{existing['id']}. Looks like the same plant from a different angle. "
+        f"If this really is a different plant, upload again and choose 'record anyway'.",
+        existing,
+        kind="nearby",
+    )
+
+def raise_if_duplicate(ngo_records, sha256_hex, dhash_hex, lat=None, lng=None):
+    existing = find_duplicate_photo_observation(ngo_records, sha256_hex, dhash_hex, lat, lng)
+    if existing:
+        raise duplicate_observation_error(existing)
+
+def filter_observation_records(records, source=None, species=None, zone=None, quality_grade=None) -> List[Dict[str, Any]]:
+    """Applies the observation list filters (source, species text, zone, quality grade) to record dicts."""
+    filtered = records
+    if source:
+        filtered = [r for r in filtered if (r.get("source") or "").lower() == source.lower()]
+    if species:
+        s = species.lower()
+        filtered = [r for r in filtered if s in (r.get("scientific_name") or "").lower() or s in (r.get("common_name") or "").lower()]
+    if zone:
+        if zone.upper() in ["ZONE A", "ZONE B", "ZONE C"]:
+            filtered = [r for r in filtered if (r.get("zone") or "").upper() == zone.upper()]
+        elif zone.upper() == "OUTSIDE":
+            filtered = [r for r in filtered if r.get("zone_status") == "OUTSIDE_ACTIVE_ZONES"]
+    if quality_grade:
+        filtered = [r for r in filtered if (r.get("quality_grade") or "").lower() == quality_grade.lower()]
+    return filtered
+
+def photo_has_geotag_overlay(record: Dict[str, Any], file_path: str) -> bool:
+    """
+    True when the photo carries a printed geotag box (address, coordinates, map thumbnail):
+    its location was read from that box, or its EXIF says it was taken with GPS Map Camera
+    (which prints the box even when it also writes EXIF GPS).
+    """
+    if record.get("gps_source") == "IMAGE_GEOTAG":
+        return True
+    try:
+        from PIL import Image
+        exif = Image.open(file_path).getexif()
+        # 271 Make, 272 Model, 305 Software, 270 ImageDescription
+        text = " ".join(str(exif.get(tag, "")) for tag in (270, 271, 272, 305))
+        return "gps map camera" in text.lower()
+    except Exception:
+        return False
 
 def validate_coordinates_location(lat: float, lng: float) -> Tuple[bool, Optional[str]]:
     boundary_path = os.path.join(get_base_dir(), "data", "raw", "van_udyan_boundary.geojson")
@@ -194,15 +449,9 @@ class DataService:
                 if quality_grade:
                     query = query.filter(Observation.quality_grade.ilike(quality_grade))
 
-                total_records = query.count()
-                if total_records > 0:
-                    limit = max(1, min(limit, 10000))
-                    page = max(1, page)
-                    total_pages = math.ceil(total_records / limit) if total_records > 0 else 1
-                    offset = (page - 1) * limit
-                    obs_objs = query.offset(offset).limit(limit).all()
-
-                    data = [
+                obs_objs = query.order_by(Observation.id).all()
+                if obs_objs or load_ngo_observations_store():
+                    db_rows = [
                         {
                             "id": o.id,
                             "source": o.source,
@@ -224,29 +473,22 @@ class DataService:
                         }
                         for o in obs_objs
                     ]
-                    return data, total_records, total_pages
+                    # NGO field observations live in the NGO store, not in the database table:
+                    # merge them in with the same filters so lists match the overview statistics.
+                    db_ids = {r["id"] for r in db_rows}
+                    ngo_rows = [r for r in filter_observation_records(load_ngo_observations_store(), source, species, zone, quality_grade)
+                                if r.get("id") not in db_ids]
+                    combined = db_rows + ngo_rows
+                    total_records = len(combined)
+                    limit = max(1, min(limit, 10000))
+                    page = max(1, page)
+                    total_pages = math.ceil(total_records / limit) if total_records > 0 else 1
+                    start_idx = (page - 1) * limit
+                    return combined[start_idx:start_idx + limit], total_records, total_pages
             except Exception:
                 pass
 
-        records = load_clean_csv_records()
-        
-        # Apply Filters
-        filtered = records
-        if source:
-            filtered = [r for r in filtered if r["source"].lower() == source.lower()]
-        if species:
-            filtered = [
-                r for r in filtered 
-                if species.lower() in (r.get("scientific_name") or "").lower() or species.lower() in (r.get("common_name") or "").lower()
-            ]
-        if zone:
-            if zone.upper() in ["ZONE A", "ZONE B", "ZONE C"]:
-                filtered = [r for r in filtered if (r.get("zone") or "").upper() == zone.upper()]
-            elif zone.upper() == "OUTSIDE":
-                filtered = [r for r in filtered if r.get("zone_status") == "OUTSIDE_ACTIVE_ZONES"]
-        if quality_grade:
-            filtered = [r for r in filtered if (r.get("quality_grade") or "").lower() == quality_grade.lower()]
-            
+        filtered = filter_observation_records(load_clean_csv_records(), source, species, zone, quality_grade)
         total_records = len(filtered)
         limit = max(1, min(limit, 10000))
         page = max(1, page)
@@ -468,9 +710,13 @@ class DataService:
         if not is_inside:
             raise ValueError(f"Coordinates ({lat}, {lng}) are outside the Bavdhan Van Udyan project boundary polygon.")
 
-        assigned_zone = data.get("zone_code") or auto_zone
+        # Boundary check is authoritative: ignore user-supplied zone_code if it disagrees
+        assigned_zone = auto_zone
 
         new_id = max([r["id"] for r in records], default=0) + 1
+        watering_interval = data.get("watering_interval_days")
+        if watering_interval is not None:
+            watering_interval = int(watering_interval)
         plant_record = {
             "id": new_id,
             "plant_code": code,
@@ -483,7 +729,9 @@ class DataService:
             "longitude": lng,
             "zone_code": assigned_zone,
             "notes": safe_str(data.get("notes")),
-            "photo_url": safe_str(data.get("photo_url"))
+            "photo_url": safe_str(data.get("photo_url")),
+            "watering_interval_days": watering_interval,
+            "last_watered_on": safe_str(data.get("last_watered_on")),
         }
 
         records.append(plant_record)
@@ -565,11 +813,15 @@ class DataService:
                 raise ValueError(f"Updated coordinates ({lat_val}, {lng_val}) are outside Van Udyan boundary polygon.")
             current["latitude"] = lat_val
             current["longitude"] = lng_val
-            current["zone_code"] = update_data.get("zone_code") or auto_zone
+            # Boundary check is authoritative on zone assignment
+            current["zone_code"] = auto_zone
 
-        for field in ["plant_code", "scientific_name", "common_name", "planted_on", "notes", "photo_url"]:
+        for field in ["plant_code", "scientific_name", "common_name", "planted_on", "notes", "photo_url", "last_watered_on"]:
             if field in update_data and update_data[field] is not None:
                 current[field] = safe_str(update_data[field])
+
+        if "watering_interval_days" in update_data and update_data["watering_interval_days"] is not None:
+            current["watering_interval_days"] = int(update_data["watering_interval_days"])
 
         current["source"] = "Planted Plants"
 
@@ -587,7 +839,7 @@ class DataService:
         return True
 
     @staticmethod
-    def create_ngo_observation(data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_ngo_observation(data: Dict[str, Any], allow_nearby_duplicate: bool = False) -> Dict[str, Any]:
         lat, lng = float(data["latitude"]), float(data["longitude"])
         is_inside, auto_zone = validate_coordinates_location(lat, lng)
         if not is_inside:
@@ -600,14 +852,14 @@ class DataService:
             return s if s else None
 
         records = load_clean_csv_records()
-        ngo_records = []
-        ngo_store_path = os.path.join(get_base_dir(), "data", "processed", "ngo_observations_store.json")
-        if os.path.exists(ngo_store_path):
-            try:
-                with open(ngo_store_path, "r", encoding="utf-8") as f:
-                    ngo_records = json.load(f)
-            except Exception:
-                pass
+        ngo_records = load_ngo_observations_store()
+
+        # 1-metre same-plant guard — the manual sighting path has to honour the same rule
+        # the photo-upload path does, otherwise users can accidentally create duplicate records
+        # by typing the same coordinates twice.
+        nearby_plant = find_same_plant_observation(ngo_records, lat, lng)
+        if nearby_plant and not allow_nearby_duplicate:
+            raise same_plant_error(nearby_plant)
 
         new_id = max([r["id"] for r in records], default=227) + 1
 
@@ -776,7 +1028,45 @@ class DataService:
         zone: Optional[str] = None,
         quality_grade: Optional[str] = None
     ) -> Dict[str, Any]:
-        return DataService.get_map_observations_geojson(source=source, zone=zone)
+        """
+        Observations as a GeoJSON FeatureCollection — the full column set from the CSV, so
+        downloads opened in QGIS, Google Earth or Felt show observer, species, source and
+        identification state alongside the point.
+        """
+        records, _, _ = DataService.get_observations(
+            source=source, zone=zone, species=species,
+            quality_grade=quality_grade, limit=10000,
+        )
+        features = []
+        for r in records:
+            features.append({
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [r.get("longitude"), r.get("latitude")],
+                },
+                "properties": {
+                    "id": r.get("id"),
+                    "source": r.get("source"),
+                    "source_id": r.get("source_id"),
+                    "scientific_name": r.get("scientific_name") or None,
+                    "common_name": r.get("common_name") or None,
+                    "observed_on": r.get("observed_on") or None,
+                    "observer": r.get("observer") or None,
+                    "quality_grade": r.get("quality_grade") or None,
+                    "identification_status": r.get("identification_status") or None,
+                    "zone": r.get("zone") or None,
+                    "zone_status": r.get("zone_status") or "OUTSIDE_ACTIVE_ZONES",
+                    "observation_url": r.get("observation_url") or None,
+                    "photo_url": r.get("photo_url") or None,
+                },
+            })
+        return {
+            "type": "FeatureCollection",
+            "name": "Bavdhan_Van_Udyan_Observations",
+            "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:OGC:1.3:CRS84"}},
+            "features": features,
+        }
 
     @staticmethod
     def export_planted_plants_geojson(
@@ -818,14 +1108,51 @@ class DataService:
 
     @staticmethod
     def export_complete_zip_package() -> bytes:
+        """
+        Complete dataset archive. Includes a README so recipients understand what each file
+        is and how it was produced (open data, no licence restrictions, generated date).
+        """
+        import datetime as _dt
+
         obs_csv = DataService.export_observations_csv()
         planted_csv = DataService.export_planted_plants_csv()
         species_csv = DataService.export_species_csv()
         obs_geojson = json.dumps(DataService.export_observations_geojson(), indent=2)
         planted_geojson = json.dumps(DataService.export_planted_plants_geojson(), indent=2)
 
+        readme = (
+            "Van Udyan Biodiversity Dataset\n"
+            "==============================\n\n"
+            f"Generated: {_dt.datetime.now().strftime('%d %B %Y, %H:%M IST')}\n"
+            "Source:    Van Udyan Biodiversity Platform, by RSWF (Reform Social Welfare\n"
+            "           Foundation), Pune. Live project database.\n"
+            "Site:      Bavdhan Van Udyan, Pune, Maharashtra 411021 (Plus Code GQ9J+74Q).\n"
+            "Area:      3.58 ha outer boundary; 3 RSWF active work zones (A, B, C).\n\n"
+            "Files in this archive\n"
+            "---------------------\n"
+            "  van_udyan_observations.csv       Every plant record (iNaturalist + RSWF uploads).\n"
+            "                                   Columns include scientific_name, observer, zone,\n"
+            "                                   observed_on, latitude, longitude, photo_url.\n"
+            "  van_udyan_observations.geojson   The same records as GeoJSON points, ready to open\n"
+            "                                   in QGIS, Google Earth or Felt. Coordinates in WGS84.\n"
+            "  van_udyan_planted_plants.csv     Trees RSWF has planted, with plant codes, species,\n"
+            "                                   planting dates and current health status.\n"
+            "  van_udyan_planted_plants.geojson Same, as GeoJSON points.\n"
+            "  van_udyan_species.csv            Deduplicated species list with observation counts.\n\n"
+            "A note on numbers\n"
+            "-----------------\n"
+            "Record counts measure how often something was observed, not how abundant it is.\n"
+            "Areas with no records are monitoring gaps, not areas without plants.\n\n"
+            "Credits\n"
+            "-------\n"
+            "iNaturalist contributors (reference records), Pl@ntNet (AI identification),\n"
+            "OpenStreetMap (base map), RSWF volunteers (field photos).\n"
+            "Open data — reuse welcome; please credit RSWF when citing.\n"
+        )
+
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("README.txt", readme)
             zip_file.writestr("van_udyan_observations.csv", obs_csv)
             zip_file.writestr("van_udyan_planted_plants.csv", planted_csv)
             zip_file.writestr("van_udyan_species.csv", species_csv)
@@ -843,22 +1170,27 @@ class DataService:
         file_bytes: bytes,
         original_filename: str,
         content_type: str,
-        confirm_location: bool = False
+        confirm_location: bool = False,
+        allow_nearby_duplicate: bool = False,
     ) -> Dict[str, Any]:
-        from app.services.exif_service import validate_upload_file, generate_safe_filename, extract_photo_location
+        from app.services.exif_service import validate_upload_file, generate_content_filename, extract_photo_location, compute_photo_fingerprint
         import datetime
 
         # 1. File Validation (Extension, MIME, Size)
         validate_upload_file(original_filename, content_type, len(file_bytes))
 
-        # 2. Generate Safe Unique Filename & Save File
-        safe_name = generate_safe_filename(original_filename)
-        uploads_dir = os.path.join(get_base_dir(), "data", "uploads")
-        os.makedirs(uploads_dir, exist_ok=True)
-        file_path = os.path.join(uploads_dir, safe_name)
+        # 2. Reject byte-identical re-uploads of an already recorded photo (before running OCR)
+        sha256_hex, dhash_hex = compute_photo_fingerprint(file_bytes)
+        ngo_records = load_ngo_observations_store()
+        raise_if_duplicate(ngo_records, sha256_hex, dhash_hex)
 
-        with open(file_path, "wb") as f:
-            f.write(file_bytes)
+        # 3. Save file under a content-addressed name on local disk so OCR / EXIF can read it.
+        # In Supabase mode this stays as a cached copy; the cloud upload happens once we persist.
+        safe_name = generate_content_filename(original_filename, sha256_hex)
+        file_path = os.path.join(photo_storage.uploads_dir(), safe_name)
+        if not os.path.exists(file_path):
+            with open(file_path, "wb") as f:
+                f.write(file_bytes)
 
         # 3. Extract GPS Location using Strict NGO Priority:
         # Priority 1: EXIF GPS (bypasses OCR)
@@ -888,6 +1220,26 @@ class DataService:
         if not is_inside:
             raise ValueError(f"Uploaded photo location ({lat}, {lng}) is outside the Van Udyan project boundary.")
 
+        # 5. Reject the same image re-compressed / re-forwarded at the same spot
+        raise_if_duplicate(ngo_records, sha256_hex, dhash_hex, lat, lng)
+
+        # 5a. Within SAME_PLANT_RADIUS_METERS we treat different photos as the same plant
+        # (volunteer walked around the tree). Caller can override with allow_nearby_duplicate=true
+        # when two plants really do grow this close (e.g. dense plantings).
+        nearby_plant = find_same_plant_observation(ngo_records, lat, lng)
+        if nearby_plant and not allow_nearby_duplicate:
+            raise same_plant_error(nearby_plant)
+        nearby_ids = find_nearby_observation_ids(ngo_records, lat, lng)
+
+        # Persist the photo through the configured backend (Supabase upload in cloud mode).
+        # Doing this before the "pending confirmation" return makes sure the confirm step
+        # finds the photo even if the backend has restarted in between.
+        if not photo_storage.is_local():
+            try:
+                photo_storage.write_bytes(safe_name, file_bytes, content_type=content_type)
+            except Exception as upload_err:
+                raise ValueError(f"Could not store photo in cloud storage: {upload_err}") from upload_err
+
         obs_date = loc.get("captured_at") or datetime.date.today().isoformat()
         zone_name = auto_zone or "Outside Active Zones"
         zone_status = "ACTIVE_ZONE" if auto_zone else "OUTSIDE_ACTIVE_ZONES"
@@ -910,20 +1262,12 @@ class DataService:
                 "photo_url": f"/uploads/{safe_name}",
                 "captured_at": obs_date,
                 "status": "pending_confirmation",
+                "nearby_observation_ids": nearby_ids,
                 "message": "GPS detected from visible geotag on image. Please confirm coordinates to complete spatial verification."
             }
 
-        # 6. Create NGO Observation Record (for EXIF GPS or Confirmed IMAGE_GEOTAG)
+        # 7. Create NGO Observation Record (for EXIF GPS or Confirmed IMAGE_GEOTAG)
         records = load_clean_csv_records()
-        ngo_records = []
-        ngo_store_path = os.path.join(get_base_dir(), "data", "processed", "ngo_observations_store.json")
-        if os.path.exists(ngo_store_path):
-            try:
-                with open(ngo_store_path, "r", encoding="utf-8") as f:
-                    ngo_records = json.load(f)
-            except Exception:
-                pass
-
         new_id = max([r["id"] for r in records], default=227) + 1
 
         ngo_obs = {
@@ -942,7 +1286,9 @@ class DataService:
             "gps_source": gps_source,
             "gps_description": gps_description,
             "zone": auto_zone or "",
-            "zone_status": zone_status
+            "zone_status": zone_status,
+            "photo_sha256": sha256_hex,
+            "photo_dhash": dhash_hex
         }
 
         ngo_records.append(ngo_obs)
@@ -963,6 +1309,7 @@ class DataService:
             "photo_url": f"/uploads/{safe_name}",
             "captured_at": obs_date,
             "status": "spatially_verified",
+            "nearby_observation_ids": nearby_ids,
             "message": f"Photo observation successfully uploaded and spatially verified via {gps_description} inside {'Zone ' + auto_zone if auto_zone else 'Van Udyan site boundary'}."
         }
 
@@ -973,7 +1320,8 @@ class DataService:
         longitude: float,
         observed_on: Optional[str] = None,
         observer: Optional[str] = "RSWF Field Volunteer",
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
+        allow_nearby_duplicate: bool = False,
     ) -> Dict[str, Any]:
         """
         Creates an NGO observation record for user-confirmed image geotag coordinates.
@@ -984,16 +1332,27 @@ class DataService:
         if not is_inside:
             raise ValueError(f"Confirmed coordinates ({latitude}, {longitude}) are outside the Van Udyan project boundary.")
 
-        records = load_clean_csv_records()
-        ngo_records = []
-        ngo_store_path = os.path.join(get_base_dir(), "data", "processed", "ngo_observations_store.json")
-        if os.path.exists(ngo_store_path):
-            try:
-                with open(ngo_store_path, "r", encoding="utf-8") as f:
-                    ngo_records = json.load(f)
-            except Exception:
-                pass
+        # Guard against confirming the same photo twice (double click, re-upload + re-confirm)
+        from app.services.exif_service import compute_photo_fingerprint
+        ngo_records = load_ngo_observations_store()
+        same_url = next((r for r in ngo_records if photo_url and r.get("photo_url") == photo_url), None)
+        if same_url:
+            raise duplicate_observation_error(same_url)
 
+        sha256_hex, dhash_hex = None, None
+        photo_path = resolve_upload_path(photo_url)
+        if photo_path and os.path.exists(photo_path):
+            with open(photo_path, "rb") as f:
+                sha256_hex, dhash_hex = compute_photo_fingerprint(f.read())
+            raise_if_duplicate(ngo_records, sha256_hex, dhash_hex, latitude, longitude)
+
+        # Same 1-metre "same plant" guard that process_photo_upload applies, so the
+        # geotag-confirm path can't sneak around it.
+        nearby_plant = find_same_plant_observation(ngo_records, latitude, longitude)
+        if nearby_plant and not allow_nearby_duplicate:
+            raise same_plant_error(nearby_plant)
+
+        records = load_clean_csv_records()
         new_id = max([r["id"] for r in records], default=227) + 1
         obs_date = observed_on or datetime.date.today().isoformat()
         zone_status = "ACTIVE_ZONE" if auto_zone else "OUTSIDE_ACTIVE_ZONES"
@@ -1016,7 +1375,9 @@ class DataService:
             "gps_description": "GPS detected from visible geotag on image (User Confirmed)",
             "zone": auto_zone or "",
             "zone_status": zone_status,
-            "notes": notes
+            "notes": notes,
+            "photo_sha256": sha256_hex,
+            "photo_dhash": dhash_hex
         }
 
         ngo_records.append(ngo_obs)
@@ -1046,16 +1407,15 @@ class DataService:
         Inspects an uploaded photo file for GPS coordinates (EXIF or visible geotag)
         and checks boundary containment without creating a database observation record.
         """
-        from app.services.exif_service import validate_upload_file, generate_safe_filename, extract_photo_location
+        from app.services.exif_service import validate_upload_file, generate_content_filename, extract_photo_location, compute_photo_fingerprint
 
         validate_upload_file(original_filename, content_type, len(file_bytes))
-        safe_name = generate_safe_filename(original_filename)
-        uploads_dir = os.path.join(get_base_dir(), "data", "uploads")
-        os.makedirs(uploads_dir, exist_ok=True)
-        file_path = os.path.join(uploads_dir, safe_name)
-
-        with open(file_path, "wb") as f:
-            f.write(file_bytes)
+        sha256_hex, _ = compute_photo_fingerprint(file_bytes)
+        safe_name = generate_content_filename(original_filename, sha256_hex)
+        file_path = os.path.join(photo_storage.uploads_dir(), safe_name)
+        if not os.path.exists(file_path):
+            with open(file_path, "wb") as f:
+                f.write(file_bytes)
 
         loc = extract_photo_location(file_path)
         lat = loc.get("latitude")
@@ -1100,15 +1460,15 @@ class DataService:
         if not photo_url:
             raise ValueError(f"Observation ID #{obs_id} does not have an attached photo for AI identification.")
 
-        # Resolve local physical image file path
-        filename = os.path.basename(photo_url)
-        file_path = os.path.join(get_base_dir(), "data", "uploads", filename)
+        # Resolve to a local file path (downloads from Supabase on demand in cloud mode)
+        file_path = resolve_upload_path(photo_url)
+        if not file_path or not os.path.exists(file_path):
+            raise ValueError(f"Image file for observation #{obs_id} is not available on the server.")
 
-        if not os.path.exists(file_path):
-            raise ValueError(f"Image file '{filename}' for observation #{obs_id} was not found on server.")
-
-        # Call Pl@ntNet AI identification service
-        ai_res = PlantNetService.identify_plant(file_path, organ=organ)
+        # Call Pl@ntNet AI identification service (geotag overlay box removed from the photo first)
+        ai_res = PlantNetService.identify_plant(
+            file_path, organ=organ, crop_geotag_overlay=photo_has_geotag_overlay(obs, file_path)
+        )
 
         top_pred = ai_res.get("top_prediction") or {}
         prediction_entry = {
@@ -1193,15 +1553,19 @@ class DataService:
         quality_grade = "needs_id"
 
         if decision_clean == "confirm":
-            rank = selected_prediction_rank or 1
-            if not latest_pred or "predictions" not in latest_pred or len(latest_pred["predictions"]) == 0:
-                raise ValueError(f"No AI predictions available for Observation #{obs_id} to confirm.")
-            
-            preds_list = latest_pred["predictions"]
-            target_pred = next((p for p in preds_list if p.get("rank") == rank), preds_list[0])
-            
-            verified_sci = target_pred.get("scientific_name")
-            verified_com = target_pred.get("common_name")
+            if scientific_name and scientific_name.strip():
+                # Reviewer confirms the species currently suggested on the record
+                verified_sci = scientific_name.strip()
+                verified_com = common_name.strip() if common_name else obs.get("common_name")
+            else:
+                rank = selected_prediction_rank or 1
+                # Latest in-session AI run first, then suggestions stored on the record (e.g. bulk imports)
+                preds_list = (latest_pred or {}).get("predictions") or obs.get("ai_top_predictions") or []
+                if not preds_list:
+                    raise ValueError(f"No AI predictions available for Observation #{obs_id} to confirm.")
+                target_pred = next((p for p in preds_list if p.get("rank") == rank), preds_list[0])
+                verified_sci = target_pred.get("scientific_name")
+                verified_com = target_pred.get("common_name")
             status_code = "verified"
             quality_grade = "research"
 
@@ -1231,7 +1595,23 @@ class DataService:
                     r["common_name"] = verified_com
                     r["identification_status"] = status_code
                     r["quality_grade"] = quality_grade
-                    r["verification_notes"] = notes
+                    # Strip stale "Not yet confirmed" phrases once the record is reviewed
+                    existing_notes = (r.get("verification_notes") or "").strip()
+                    if decision_clean in ("confirm", "correct"):
+                        import re as _re
+                        existing_notes = _re.sub(
+                            r"Not yet confirmed by RSWF\.?",
+                            "",
+                            existing_notes,
+                            flags=_re.IGNORECASE,
+                        ).strip(" \n\t.;,")
+                    review_line = f"Review ({decision_clean}): {notes}" if notes else None
+                    if review_line and existing_notes:
+                        r["verification_notes"] = f"{existing_notes}\n{review_line}"
+                    elif review_line:
+                        r["verification_notes"] = review_line
+                    else:
+                        r["verification_notes"] = existing_notes or None
                     break
 
             with open(ngo_store_path, "w", encoding="utf-8") as f:
@@ -1350,8 +1730,11 @@ class DataService:
             "created_at": datetime.datetime.now().isoformat()
         }
 
-        # Store in historical repository
+        # Store in historical repository (hydrate from disk first so appends don't lose prior visits
+        # after a restart on an ephemeral host) and persist through the sync layer
+        load_monitoring_store()
         DataService._plant_monitoring_repository.append(record)
+        save_monitoring_store(DataService._plant_monitoring_repository)
 
         # 5. Update plant current status in store
         store_path = os.path.join(get_base_dir(), "data", "processed", "planted_plants_store.json")

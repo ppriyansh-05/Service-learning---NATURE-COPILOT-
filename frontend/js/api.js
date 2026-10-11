@@ -54,6 +54,29 @@ class ApiService {
         } catch (e) {}
     }
 
+    // Builds an Error from a failed response. A 409 duplicate-photo conflict carries the
+    // existing observation on err.duplicate so callers can reuse it instead of failing.
+    static async buildApiError(response) {
+        let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
+        let duplicate = null;
+        try {
+            const errBody = await response.json();
+            const detail = errBody.detail;
+            if (typeof detail === "string") {
+                errorMsg = detail;
+            } else if (detail && detail.message) {
+                errorMsg = detail.message;
+                if (detail.duplicate) duplicate = detail;
+            } else if (detail) {
+                errorMsg = JSON.stringify(detail);
+            }
+        } catch (e) {}
+        const err = new Error(errorMsg);
+        err.status = response.status;
+        err.duplicate = duplicate;
+        return err;
+    }
+
     static async fetchJson(url, options = {}) {
         try {
             const headers = options.headers || {};
@@ -63,31 +86,70 @@ class ApiService {
             }
             options.headers = headers;
 
-            const response = await fetch(url, options);
+            // One retry on transient network failures (Render free tier wake-ups, flaky Wi-Fi).
+            // We never retry on an HTTP response — that'd replay POST/DELETE accidentally.
+            let response;
+            try {
+                response = await fetch(url, options);
+            } catch (netErr) {
+                const method = (options.method || "GET").toUpperCase();
+                if (method === "GET" || method === "HEAD") {
+                    await new Promise(r => setTimeout(r, 800));
+                    response = await fetch(url, options);
+                } else {
+                    throw netErr;
+                }
+            }
+
             if (!response.ok) {
-                let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
-                try {
-                    const errBody = await response.json();
-                    if (errBody.detail) {
-                        errorMsg = typeof errBody.detail === "string" ? errBody.detail : JSON.stringify(errBody.detail);
-                    }
-                } catch (e) {}
                 if (response.status === 401) {
                     // Clear invalid cached session password on auth failure
                     this.clearNgoPassword();
                 }
-                throw new Error(errorMsg);
+                throw await this.buildApiError(response);
             }
             if (response.status === 204) return null;
             return await response.json();
         } catch (error) {
-            console.error(`API Fetch Error [${url}]:`, error);
+            // 401s on protected endpoints are expected while logged out — not worth a console error.
+            if (!(error && error.status === 401)) {
+                console.error(`API Fetch Error [${url}]:`, error);
+            }
             throw error;
         }
     }
 
     static getHealth() {
         return this.fetchJson(window.APP_CONFIG.getEndpoint("/health"));
+    }
+
+    // Watering reminders
+    static getWateringQueue() {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint("/planted-plants/watering"));
+    }
+
+    static markPlantWatered(plantId, onDate = null, observer = null) {
+        const params = new URLSearchParams();
+        if (onDate) params.set("on_date", onDate);
+        if (observer) params.set("observer", observer);
+        const query = params.toString();
+        return this.fetchJson(
+            window.APP_CONFIG.getEndpoint(`/planted-plants/${plantId}/watered` + (query ? "?" + query : "")),
+            { method: "POST" },
+        );
+    }
+
+    // Server-side check of the admin password. Returns true if the given password matches,
+    // false if the backend rejected it with 401. Throws for any other error (network, 500, etc.).
+    static async verifyAdminPassword(candidatePassword) {
+        const url = window.APP_CONFIG.getEndpoint("/auth/verify");
+        const resp = await fetch(url, {
+            method: "POST",
+            headers: { "X-NGO-Admin-Password": candidatePassword || "" },
+        });
+        if (resp.status === 204) return true;
+        if (resp.status === 401) return false;
+        throw await this.buildApiError(resp);
     }
 
     static getDbHealth() {
@@ -112,8 +174,9 @@ class ApiService {
         return this.fetchJson(window.APP_CONFIG.getEndpoint(`/observations/${id}`));
     }
 
-    static createNGOObservation(data) {
-        return this.fetchJson(window.APP_CONFIG.getEndpoint("/observations/ngo"), {
+    static createNGOObservation(data, { allowNearbyDuplicate = false } = {}) {
+        const q = allowNearbyDuplicate ? "?allow_nearby_duplicate=true" : "";
+        return this.fetchJson(window.APP_CONFIG.getEndpoint("/observations/ngo" + q), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data)
@@ -121,32 +184,28 @@ class ApiService {
     }
 
     // Photo Upload & Location Detection (EXIF & Image Geotag)
-    static async uploadPhotoObservation(file, confirmLocation = false) {
+    // allowNearbyDuplicate=true overrides the 1-metre same-plant guard (second attempt after the
+    // user confirms "no, this really is a different plant").
+    static async uploadPhotoObservation(file, { confirmLocation = false, allowNearbyDuplicate = false } = {}) {
         const formData = new FormData();
         formData.append("file", file);
 
-        const endpoint = confirmLocation ? "/observations/upload?confirm_location=true" : "/observations/upload";
-        const url = window.APP_CONFIG.getEndpoint(endpoint);
-        const response = await fetch(url, {
-            method: "POST",
-            body: formData
-        });
+        const params = new URLSearchParams();
+        if (confirmLocation) params.set("confirm_location", "true");
+        if (allowNearbyDuplicate) params.set("allow_nearby_duplicate", "true");
+        const query = params.toString();
+        const url = window.APP_CONFIG.getEndpoint("/observations/upload" + (query ? "?" + query : ""));
 
+        const response = await fetch(url, { method: "POST", body: formData });
         if (!response.ok) {
-            let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
-            try {
-                const errBody = await response.json();
-                if (errBody.detail) {
-                    errorMsg = typeof errBody.detail === "string" ? errBody.detail : JSON.stringify(errBody.detail);
-                }
-            } catch (e) {}
-            throw new Error(errorMsg);
+            throw await this.buildApiError(response);
         }
         return await response.json();
     }
 
-    static async confirmGeotagLocation(photoUrl, latitude, longitude, observedOn = null, observer = "RSWF Field Volunteer", notes = null) {
-        return this.fetchJson(window.APP_CONFIG.getEndpoint("/observations/confirm-location"), {
+    static async confirmGeotagLocation(photoUrl, latitude, longitude, observedOn = null, observer = "RSWF Field Volunteer", notes = null, allowNearbyDuplicate = false) {
+        const q = allowNearbyDuplicate ? "?allow_nearby_duplicate=true" : "";
+        return this.fetchJson(window.APP_CONFIG.getEndpoint("/observations/confirm-location" + q), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -345,6 +404,39 @@ class ApiService {
 
     static getAnalyticsTemporal() {
         return this.fetchJson(window.APP_CONFIG.getEndpoint('/analytics/temporal'));
+    }
+
+    // Phase 15 — species profiles, verification queue, weather, bulk upload
+    static getSpeciesProfile(name) {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint(`/analytics/species-profile?name=${encodeURIComponent(name)}`));
+    }
+    static getVerificationQueue(limit = 50) {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint(`/analytics/verification-queue?limit=${limit}`));
+    }
+    // Compliance (Sacred Grove master plan)
+    static getComplianceGrid()    { return this.fetchJson(window.APP_CONFIG.getEndpoint('/compliance/grid')); }
+    static getComplianceHeatmap() { return this.fetchJson(window.APP_CONFIG.getEndpoint('/compliance/heatmap')); }
+    static getComplianceAudit()   { return this.fetchJson(window.APP_CONFIG.getEndpoint('/compliance/audit')); }
+    static getComplianceSpacingWarnings() { return this.fetchJson(window.APP_CONFIG.getEndpoint('/compliance/spacing-warnings')); }
+    static getComplianceCalibration() { return this.fetchJson(window.APP_CONFIG.getEndpoint('/compliance/calibration')); }
+    static updateComplianceCalibration(payload) {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint('/compliance/calibration'), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+    }
+
+    static async bulkUploadPhotos(files, { allowNearbyDuplicate = false } = {}) {
+        const fd = new FormData();
+        for (const f of files) fd.append('files', f);
+        const url = window.APP_CONFIG.getEndpoint(`/observations/bulk-upload?allow_nearby_duplicate=${allowNearbyDuplicate}`);
+        const res = await fetch(url, { method: 'POST', body: fd });
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(text || `HTTP ${res.status}`);
+        }
+        return res.json();
     }
 
     // Phase 14 / 14.1 Conservation & SDG Report Methods

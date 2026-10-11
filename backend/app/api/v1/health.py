@@ -3,14 +3,32 @@ Health Check Router Module
 Provides GET /health and GET /health/db endpoints.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.db.session import get_db
 from app.schemas.schemas import HealthResponse, DBHealthResponse
 from app.core.config import settings
+from app.core.security import verify_ngo_admin_password, auth_probe_rate_limit
 
 router = APIRouter(tags=["Health & Status"])
+
+
+@router.post("/auth/verify", include_in_schema=False)
+def verify_admin_password(
+    _ratelimit: None = Depends(auth_probe_rate_limit),
+    _ok: str = Depends(verify_ngo_admin_password),
+):
+    """
+    Lightweight password check used by the dashboard's unlock dialog.
+    - 204 No Content when the X-NGO-Admin-Password header matches.
+    - 401 Unauthorized when it does not (unified message — the response does
+      not reveal whether the header was missing or wrong).
+    - 429 Too Many Requests when the per-IP auth-rate-limit is exhausted.
+    Does not touch the database or persist anything.
+    """
+    return Response(status_code=204)
+
 
 @router.get("/health", response_model=HealthResponse)
 def get_health():

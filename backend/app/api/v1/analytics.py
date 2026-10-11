@@ -4,10 +4,24 @@ Exposes REST endpoints for recorded biodiversity, zone comparison, coverage anal
 rule-based action priorities, species distribution, and temporal timeline.
 """
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 from app.services.analytics_service import AnalyticsService
+from app.services.insights_service import (
+    species_profile,
+    verification_queue,
+)
 
 router = APIRouter(prefix="/analytics", tags=["Advanced Analytics & Conservation Insights"])
+
+@router.get("/species-profile")
+def get_species_profile(name: str = Query(..., min_length=2, description="Scientific name (case-insensitive)")):
+    """Aggregate profile for a species — zones, phenology, pins, sources, rarity."""
+    return species_profile(name)
+
+@router.get("/verification-queue")
+def get_verification_queue(limit: int = Query(50, ge=1, le=200)):
+    """NGO observations awaiting human review (public read; verify POST still requires admin)."""
+    return verification_queue(limit=limit)
 
 @router.get("/biodiversity")
 def get_biodiversity_analytics():

@@ -5,14 +5,41 @@ normalizes Top 3 predictions, calculates confidence thresholds, and handles API 
 """
 
 import os
+import io
 import json
 import urllib.parse
 from typing import Dict, Any, List, Optional
 import requests
+from PIL import Image, ImageOps
 from app.core.config import settings
 
+# Fraction of the photo height covered by a GPS Map Camera style overlay box at the bottom
+GEOTAG_OVERLAY_FRACTION = 0.22
+# Longest side of the image sent to Pl@ntNet (keeps uploads fast; well above its recommended minimum)
+MAX_UPLOAD_DIMENSION = 1600
+
 class PlantNetService:
-    PLANTNET_API_URL = "https://my-api.plantnet.org/v2/identify/all"
+    PLANTNET_API_BASE = "https://my-api.plantnet.org/v2/identify"
+    # Fallback flora when the regional flora has no match
+    FALLBACK_PROJECT = "all"
+
+    @staticmethod
+    def prepare_image(image_path: str, crop_geotag_overlay: bool = False) -> bytes:
+        """
+        Prepares a field photo for identification:
+        - applies EXIF orientation,
+        - removes the bottom geotag overlay (address text + map thumbnail), which otherwise gets
+          analysed as if it were part of the plant,
+        - downsizes to MAX_UPLOAD_DIMENSION and re-encodes as JPEG.
+        """
+        img = ImageOps.exif_transpose(Image.open(image_path)).convert("RGB")
+        if crop_geotag_overlay:
+            w, h = img.size
+            img = img.crop((0, 0, w, int(h * (1 - GEOTAG_OVERLAY_FRACTION))))
+        img.thumbnail((MAX_UPLOAD_DIMENSION, MAX_UPLOAD_DIMENSION), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=90)
+        return buf.getvalue()
 
     @staticmethod
     def classify_confidence(score: float) -> str:
@@ -25,10 +52,12 @@ class PlantNetService:
             return "LOW CONFIDENCE"
 
     @staticmethod
-    def identify_plant(image_path: str, organ: str = "auto") -> Dict[str, Any]:
+    def identify_plant(image_path: str, organ: str = "auto", crop_geotag_overlay: bool = False) -> Dict[str, Any]:
         """
         Sends an image file to the Pl@ntNet API for AI plant species identification.
-        Returns normalized prediction results with Top 3 suggestions.
+        Queries the regional flora (settings.PLANTNET_PROJECT, default Indian Subcontinent) so
+        species from other continents are not suggested, falling back to the world flora when the
+        regional flora has no match. Returns normalized prediction results with Top 3 suggestions.
         """
         api_key = settings.PLANTNET_API_KEY
         if not api_key:
@@ -51,16 +80,27 @@ class PlantNetService:
         valid_organs = {"auto", "leaf", "flower", "fruit", "bark", "habit"}
         organ_param = organ.lower() if organ and organ.lower() in valid_organs else "auto"
 
-        # Build URL with api-key query parameter
         encoded_key = urllib.parse.quote(api_key)
-        url = f"{PlantNetService.PLANTNET_API_URL}?api-key={encoded_key}&lang=en"
+        project = settings.PLANTNET_PROJECT
 
         try:
-            with open(image_path, "rb") as img_f:
-                files = [("images", (os.path.basename(image_path), img_f, "image/jpeg"))]
-                data = [("organs", organ_param)] if organ_param != "auto" else []
-                
-                response = requests.post(url, files=files, data=data, timeout=15)
+            try:
+                image_bytes = PlantNetService.prepare_image(image_path, crop_geotag_overlay)
+            except Exception:
+                with open(image_path, "rb") as img_f:
+                    image_bytes = img_f.read()
+
+            def post(project_id: str):
+                url = f"{PlantNetService.PLANTNET_API_BASE}/{urllib.parse.quote(project_id)}?api-key={encoded_key}&lang=en"
+                files = [("images", ("photo.jpg", image_bytes, "image/jpeg"))]
+                data = [("organs", organ_param)]
+                return requests.post(url, files=files, data=data, timeout=30)
+
+            response = post(project)
+            # Pl@ntNet answers 404 "Species not found" when the regional flora has no match
+            if response.status_code == 404 and project != PlantNetService.FALLBACK_PROJECT:
+                project = PlantNetService.FALLBACK_PROJECT
+                response = post(project)
 
             if response.status_code in [401, 403]:
                 return {
@@ -74,6 +114,13 @@ class PlantNetService:
                     "success": False,
                     "error_code": "RATE_LIMIT_EXCEEDED",
                     "message": "Pl@ntNet API rate limit exceeded. Please try again later.",
+                    "predictions": []
+                }
+            elif response.status_code == 404:
+                return {
+                    "success": False,
+                    "error_code": "NO_MATCH",
+                    "message": "Pl@ntNet could not match this photo to any species. Try a close-up photo where a single leaf, flower or fruit fills most of the frame.",
                     "predictions": []
                 }
             elif response.status_code != 200:
@@ -116,6 +163,8 @@ class PlantNetService:
                 "success": True,
                 "provider": "Pl@ntNet",
                 "organ_used": organ_param,
+                "flora_project": project,
+                "geotag_overlay_removed": crop_geotag_overlay,
                 "total_predictions": len(predictions),
                 "top_prediction": predictions[0] if predictions else None,
                 "predictions": predictions

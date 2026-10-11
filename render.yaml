@@ -1,0 +1,86 @@
+# Render.com one-click deploy for the Van Udyan Biodiversity Platform.
+# After forking this repo and connecting it to Render ("New +" → "Blueprint"), Render reads
+# this file and creates both services. Fill in the secrets marked `sync: false` in the
+# dashboard afterwards (Render will prompt you).
+#
+# Database: use a free Supabase project (PostGIS enabled) — Render's free Postgres has no PostGIS.
+# Deployment guide: docs/DEPLOYMENT.md
+
+services:
+  # ------------------------------------------------------------------------------------------
+  # Backend API (FastAPI, Uvicorn, Pl@ntNet, OCR)
+  # ------------------------------------------------------------------------------------------
+  - type: web
+    name: van-udyan-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    plan: free                       # change to "starter" for always-on + 1 GB persistent disk
+    autoDeploy: true
+    region: singapore                # closest free region to India
+    healthCheckPath: /ready
+    envVars:
+      # Mark this instance as production so the backend enforces its hardened
+      # defaults (no docs, no default admin password, HSTS, HTTPS CORS only,
+      # trusts X-Forwarded-Proto / X-Forwarded-For from Render's edge).
+      - key: ENVIRONMENT
+        value: production
+      - key: TRUST_PROXY
+        value: "true"
+      # Rate-limit knobs (defaults are sensible; override only when needed).
+      - key: AUTH_RATE_LIMIT_PER_MINUTE
+        value: "20"
+      - key: MUTATION_RATE_LIMIT_PER_MINUTE
+        value: "120"
+      - key: MAX_REQUEST_BODY_BYTES
+        value: "16777216"
+      # Database — point this at your Supabase connection string
+      - key: DATABASE_URL
+        sync: false
+      # Pl@ntNet AI identification (free developer key from my.plantnet.org)
+      - key: PLANTNET_API_KEY
+        sync: false
+      - key: PLANTNET_PROJECT
+        value: k-indian-subcontinent
+      # Admin password RSWF staff type into the dashboard to unlock editing.
+      # Set this to a value you choose and share with the RSWF team (not a random one — pick
+      # something you can remember and tell your mentor, e.g. "rswf-admin-pass" for a demo
+      # or something stronger for real use). Change it by editing this env var in Render.
+      - key: NGO_ADMIN_PASSWORD
+        sync: false
+      # Supabase Storage for uploaded photos — otherwise photos vanish on redeploy
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: van-udyan-photos
+      # Allow the deployed dashboard to call the API from a different origin
+      - key: CORS_ORIGINS
+        value: https://van-udyan-dashboard.onrender.com
+      # Turn on the Postgres-backed state sync so NGO data survives redeploys
+      - key: ENABLE_STATE_SYNC
+        value: "true"
+
+  # ------------------------------------------------------------------------------------------
+  # Dashboard (static HTML + JS, served from Render's global CDN, never sleeps)
+  # ------------------------------------------------------------------------------------------
+  - type: web
+    name: van-udyan-dashboard
+    runtime: static
+    buildCommand: node scripts/build_frontend_config.js
+    staticPublishPath: ./frontend
+    pullRequestPreviewsEnabled: false
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache, must-revalidate
+      - path: /css/*
+        name: Cache-Control
+        value: public, max-age=604800
+      - path: /js/*
+        name: Cache-Control
+        value: public, max-age=604800
+    envVars:
+      # Build-time only: baked into frontend/js/config.local.js by scripts/build_frontend_config.js
+      - key: API_BASE_URL
+        sync: false                  # paste your backend URL here (e.g. https://van-udyan-backend.onrender.com)

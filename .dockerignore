@@ -1,0 +1,37 @@
+# Build context exclusions — keeps the Docker image small and avoids rebuilds on noise
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+backend/venv/
+.venv/
+
+# Local writable data (uploads live in a persistent volume or Supabase, not in the image)
+data/uploads/*
+data/uploads_thumbs/*
+!data/uploads/.gitkeep
+
+# Logs and local scratch
+logs/
+*.log
+
+# Local-only files
+backend/.env
+.env
+frontend/js/config.local.js
+
+# Git & editor junk
+.git/
+.gitignore
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Other large or irrelevant assets
+docs/bulk_import_review_*.html
+COLLEGE FILES/
+PROJECT FILES/
+scripts/*.kmz
