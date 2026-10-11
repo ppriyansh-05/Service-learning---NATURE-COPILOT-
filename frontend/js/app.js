@@ -694,15 +694,28 @@ const App = {
     // 2. Interactive Leaflet GIS Map Loader
     async loadMap() {
         if (!this.leafletMap) {
-            this.leafletMap = L.map("leaflet-map").setView([18.5195, 73.7800], 17);
+            this.leafletMap = L.map("leaflet-map", {
+                maxZoom: 23,
+                minZoom: 13,
+                zoomSnap: 0.25,
+                zoomDelta: 0.5,
+                wheelPxPerZoomLevel: 100
+            }).setView([18.5195, 73.7800], 17);
 
             const street = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-                maxZoom: 19,
+                maxNativeZoom: 19,
+                maxZoom: 23,
                 attribution: "© OpenStreetMap contributors | RSWF NGO"
             }).addTo(this.leafletMap);
             const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-                maxZoom: 19,
+                maxNativeZoom: 19,
+                maxZoom: 23,
                 attribution: "Imagery © Esri | RSWF NGO"
+            });
+            const googleHybrid = L.tileLayer("https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
+                maxNativeZoom: 20,
+                maxZoom: 23,
+                attribution: "Imagery © Google | RSWF NGO"
             });
 
             this.mapLayers = {
@@ -716,7 +729,7 @@ const App = {
             this.mapLayerGroup = this.mapLayers.inat;
 
             L.control.layers(
-                { "Street map": street, "Satellite": satellite },
+                { "Street map": street, "Satellite (Esri)": satellite, "Satellite (Google Hybrid)": googleHybrid },
                 {
                     "Site boundary": this.mapLayers.boundary,
                     "Zones A / B / C": this.mapLayers.zones,
@@ -726,7 +739,29 @@ const App = {
                 },
                 { collapsed: window.innerWidth < 900 }
             ).addTo(this.leafletMap);
-            L.control.scale({ imperial: false }).addTo(this.leafletMap);
+            L.control.scale({ imperial: false, maxWidth: 150 }).addTo(this.leafletMap);
+
+            // Reset View (Fit Site) button on map toolbar
+            const ResetViewControl = L.Control.extend({
+                options: { position: "topleft" },
+                onAdd: () => {
+                    const container = L.DomUtil.create("div", "leaflet-bar leaflet-control");
+                    const btn = L.DomUtil.create("a", "leaflet-control-reset-btn", container);
+                    btn.innerHTML = "🎯";
+                    btn.title = "Fit Site Boundary (Reset Zoom)";
+                    btn.href = "#";
+                    btn.setAttribute("role", "button");
+                    btn.setAttribute("aria-label", "Fit Site Boundary");
+                    btn.style.cssText = "display:flex;align-items:center;justify-content:center;font-size:15px;text-decoration:none;background:#0c251c;color:#10b981;cursor:pointer;width:30px;height:30px;line-height:30px;";
+                    L.DomEvent.disableClickPropagation(container);
+                    L.DomEvent.on(btn, "click", (e) => {
+                        L.DomEvent.stop(e);
+                        this.resetMapView();
+                    });
+                    return container;
+                }
+            });
+            new ResetViewControl().addTo(this.leafletMap);
         }
 
         Object.values(this.mapLayers).forEach(g => g.clearLayers());
@@ -822,6 +857,23 @@ const App = {
         const zones = await ApiService.getZones();
         const z = zones.find(x => x.zone_code === zoneCode);
         if (z && this.leafletMap) this.leafletMap.fitBounds(L.geoJSON(z.geometry).getBounds(), { padding: [40, 40] });
+    },
+
+    resetMapView() {
+        if (!this.leafletMap) return;
+        const bLayers = this.mapLayers && this.mapLayers.boundary ? this.mapLayers.boundary.getLayers() : [];
+        if (bLayers.length > 0 && typeof bLayers[0].getBounds === "function") {
+            this.leafletMap.fitBounds(bLayers[0].getBounds(), { padding: [25, 25] });
+        } else {
+            this.leafletMap.setView([18.5195, 73.7800], 17);
+        }
+    },
+
+    async showObservationOnMap(lat, lng) {
+        await this.switchTab("map");
+        if (this.leafletMap && lat && lng) {
+            this.leafletMap.setView([lat, lng], 21);
+        }
     },
 
     // Opens the Observations tab filtered to one zone
