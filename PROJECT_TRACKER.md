@@ -837,3 +837,9 @@ Key Changes:
 - Verification: GitHub source inspection and edits only. No live API tests, automated tests, or deployment performed.
 
 - **Verification persistence follow-up:** RSWF verification now looks up the observation in the NGO-owned store first, preventing numeric ID collisions with iNaturalist reference rows. It saves verification via `save_ngo_observations_store()` so configured cloud state sync receives the verified status. Missing NGO records fail clearly rather than accidentally targeting a reference record.
+
+### Follow-up — Verified Planted-Tree iNaturalist Queue — 2026-10-14
+- Narrowed the iNaturalist upload queue to RSWF-owned observations explicitly marked `observation_type = planted_rswf`; ordinary sightings and public iNaturalist reference observations are excluded.
+- A planted-tree row remains visible while pending, but selection is enabled only after the NGO identification status is `verified` or `corrected`. The action rechecks those conditions before opening drafts.
+- The action opens prefilled iNaturalist observation-creation pages. The reviewer must sign in on iNaturalist, attach/review the photo and metadata, and submit there. Nature Copilot does not collect iNaturalist credentials or directly publish through the API.
+- Verification status: source changes committed on the feature branch only. No automated tests, live iNaturalist submission, or production deployment were run from this environment.
