@@ -151,7 +151,7 @@ DUPLICATE_SAME_SPOT_METERS = 10.0
 # A volunteer walking around a tree takes several photos from different angles — we don't want
 # each one to become its own observation. The uploader can override with allow_nearby_duplicate
 # when two plants really do grow this close together (e.g. dense plantings).
-SAME_PLANT_RADIUS_METERS = 1.0
+SAME_PLANT_RADIUS_METERS = 0.5
 
 class DuplicateObservationError(ValueError):
     """
@@ -308,7 +308,7 @@ def duplicate_observation_error(existing: Dict[str, Any]) -> DuplicateObservatio
 def same_plant_error(existing: Dict[str, Any]) -> DuplicateObservationError:
     name = existing.get("common_name") or existing.get("scientific_name") or "a plant"
     return DuplicateObservationError(
-        f"A plant ({name}) is already recorded within {SAME_PLANT_RADIUS_METERS:.0f} metre of "
+        f"A plant ({name}) is already recorded within {SAME_PLANT_RADIUS_METERS:g} metre of "
         f"this spot as Observation #{existing['id']}. Looks like the same plant from a different angle. "
         f"If this really is a different plant, upload again and choose 'record anyway'.",
         existing,

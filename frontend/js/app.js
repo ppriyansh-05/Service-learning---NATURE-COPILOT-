@@ -3136,10 +3136,10 @@ Status: ${c.status}`;
         const files = e.dataTransfer ? Array.from(e.dataTransfer.files) : Array.from(e.target.files || []);
         const imgs = files.filter(f => /\.(jpe?g|png|webp)$/i.test(f.name));
         if (!imgs.length) { this.notify("No JPG/PNG/WEBP files found.", "error"); return; }
-        const MAX_FILE_BYTES = 15 * 1024 * 1024;
+        const MAX_FILE_BYTES = 50 * 1024 * 1024;
         const tooLarge = imgs.filter(f => f.size > MAX_FILE_BYTES);
         if (tooLarge.length) {
-            this.notify(`These files exceed 15 MB: ${tooLarge.slice(0, 3).map(f => f.name).join(", ")}${tooLarge.length > 3 ? "…" : ""}. Compress them and retry.`, "error", 7000);
+            this.notify(`These files exceed 50 MB: ${tooLarge.slice(0, 3).map(f => f.name).join(", ")}${tooLarge.length > 3 ? "…" : ""}. Compress them and retry.`, "error", 7000);
             return;
         }
         const obsType = document.querySelector('input[name="bulk-obs-type"]:checked')?.value || "sighted";
