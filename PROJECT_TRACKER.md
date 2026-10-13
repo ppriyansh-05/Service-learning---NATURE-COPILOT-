@@ -822,3 +822,8 @@ Key Changes:
 - **State sync:** NGO observation edits/deletes now use the shared save helper so changes are also pushed to configured cloud state sync. Photo objects are not automatically deleted as part of record deletion.
 - **Data safety:** no production data was deleted, no live test records/photos were created, and no iNaturalist reference data was changed.
 - **Verification:** code reviewed through GitHub. No local test suite, frontend runtime test, live API test, or deployment was run from this environment. Changes remain on branch `fix/planted-registration-compliance-inat-ux` pending review and deployment.
+
+### Follow-up — Biodiversity Map and iNaturalist Button Clarity — 2026-10-14
+- Exposed the persisted `observation_type` in observation GeoJSON and changed the Biodiversity Map marker fill to red only for RSWF uploads explicitly marked `planted_rswf`. Other RSWF sightings remain orange and iNaturalist observations remain green; the separate planted-register markers remain red as well.
+- Renamed the UI action from “Upload Selected to iNaturalist” to “Prepare iNaturalist Drafts” to accurately describe its current behavior. It opens prefilled iNaturalist creation pages; a user must sign in, review, attach/confirm photos and submit on iNaturalist. The app does not yet perform an authenticated API upload.
+- Verification: source edits committed to the existing feature branch. No runtime tests or deployment were run.
