@@ -56,7 +56,7 @@ services:
         value: van-udyan-photos
       # Allow the deployed dashboard to call the API from a different origin
       - key: CORS_ORIGINS
-        value: https://van-udyan-dashboard.onrender.com
+        value: https://van-udyan-dashboard-8dtw.onrender.com
       # Turn on the Postgres-backed state sync so NGO data survives redeploys
       - key: ENABLE_STATE_SYNC
         value: "true"
