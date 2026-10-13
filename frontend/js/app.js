@@ -3134,7 +3134,7 @@ Status: ${c.status}`;
         const dz = document.getElementById("bulk-dropzone");
         if (dz) dz.classList.remove("drag");
         const files = e.dataTransfer ? Array.from(e.dataTransfer.files) : Array.from(e.target.files || []);
-        const imgs = files.filter(f => /\\.(jpe?g|png|webp)$/i.test(f.name));
+        const imgs = files.filter(f => /\.(jpe?g|png|webp)$/i.test(f.name));
         if (!imgs.length) { this.notify("No JPG/PNG/WEBP files found.", "error"); return; }
         const MAX_FILE_BYTES = 15 * 1024 * 1024;
         const tooLarge = imgs.filter(f => f.size > MAX_FILE_BYTES);
