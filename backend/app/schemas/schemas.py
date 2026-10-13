@@ -215,4 +215,5 @@ class GeotagLocationConfirmRequest(BaseModel):
     observed_on: Optional[str] = Field(None, description="Optional observation date YYYY-MM-DD")
     observer: Optional[str] = Field("RSWF Field Volunteer", description="Observer name")
     notes: Optional[str] = Field(None, description="Optional field remarks")
+    observation_type: Optional[str] = Field("sighted", description="sighted or planted_rswf")
 
