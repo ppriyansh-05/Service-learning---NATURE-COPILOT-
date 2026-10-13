@@ -64,7 +64,7 @@ def create_ngo_observation(
     obs_data: NGOObservationCreate,
     allow_nearby_duplicate: bool = Query(
         False,
-        description="Override the 1 metre same-plant guard (see /observations/upload for details).",
+        description="Override the 0.5 metre same-plant guard (see /observations/upload for details).",
     ),
 ):
     """Create a new NGO-owned field observation record (source = 'NGO / New Upload')."""
@@ -84,7 +84,7 @@ async def upload_photo_observation(
     allow_nearby_duplicate: bool = Query(
         False,
         description=(
-            "By default, uploading a photo within ~1 metre of an existing plant observation is "
+            "By default, uploading a photo within ~0.5 metre of an existing plant observation is "
             "rejected as the same plant (409 Conflict). Set true when two plants genuinely grow "
             "that close together and you want to record the new one anyway."
         ),
