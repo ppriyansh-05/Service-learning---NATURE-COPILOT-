@@ -3044,20 +3044,22 @@ Status: ${c.status}`;
                         return `<div><i>${name}</i>${common}${score !== "" ? ` <span class="conf">${this.esc(String(score))}</span>` : ""}</div>`;
                     }).join("")
                     : `<span class="muted">${this.esc(predictionMessage || "No prediction available")}</span>`;
-                const editAction = r.observation_id && r.ok && !r.requires_confirmation
-                    ? `<button type="button" class="btn-action" onclick="App.openObservationDetail(${Number(r.observation_id)})">Edit / Review</button>`
-                    : "";
+                const canEdit = Boolean(r.observation_id && r.ok && !r.requires_confirmation);
+                const editAction = canEdit
+                    ? `<button type="button" class="btn-primary btn-small" style="white-space:nowrap" onclick="App.openObservationDetail(${Number(r.observation_id)})">✏️ Edit</button>`
+                    : `<span class="muted">${r.requires_confirmation ? "Confirm location first" : "—"}</span>`;
                 return `<tr>
                     <td>${this.esc(r.filename || "Photo")}</td>
                     <td>${badge}</td>
                     <td>${predictionHtml}</td>
-                    <td class="muted">${this.esc(String(msg))}${editAction ? `<div style="margin-top:0.4rem">${editAction}</div>` : ""}</td>
+                    <td class="muted">${this.esc(String(msg))}</td>
+                    <td>${editAction}</td>
                 </tr>`;
             }).join("");
             prog.textContent = `Done: ${res.summary.ok} ok · ${res.summary.needs_confirmation} need confirmation · ${res.summary.duplicates} duplicates · ${res.summary.rejected} rejected · ${res.summary.errors} errors.`;
             document.getElementById("bulk-results").innerHTML = `
                 <table class="data-table" style="margin-top:0.75rem">
-                    <thead><tr><th>File</th><th>Result</th><th>Plant prediction</th><th>Note / actions</th></tr></thead>
+                    <thead><tr><th>File</th><th>Result</th><th>Plant prediction</th><th>Note</th><th>Action</th></tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
                 <div style="display:flex;justify-content:flex-end;margin-top:0.75rem">
