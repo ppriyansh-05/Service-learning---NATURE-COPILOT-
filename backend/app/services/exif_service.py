@@ -333,13 +333,36 @@ def _ocr_image(img: Image.Image) -> str:
             except OSError:
                 pass
 
-    # Secondary OCR Fallback: pytesseract if installed
+    # Secondary OCR fallback: pytesseract is cross-platform and is the deployed
+    # Linux path. Keep the OCR configuration explicit because geotag text is a
+    # short, high-contrast numeric label rather than paragraph text.
     if not recognized_text:
         try:
             import pytesseract
-            recognized_text = pytesseract.image_to_string(img)
-        except Exception:
-            pass
+            from pytesseract import TesseractNotFoundError
+
+            try:
+                recognized_text = pytesseract.image_to_string(
+                    img,
+                    config="--oem 3 --psm 11",
+                    timeout=8,
+                )
+            except TesseractNotFoundError:
+                # Let the caller distinguish missing OCR runtime from a photo
+                # that truly has no visible geotag.
+                raise RuntimeError(
+                    "Visible GPS text could not be checked because the Tesseract OCR executable is unavailable."
+                )
+        except ImportError as exc:
+            raise RuntimeError(
+                "Visible GPS text could not be checked because pytesseract is not installed."
+            ) from exc
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError(
+                f"Visible GPS OCR failed: {type(exc).__name__}: {exc}"
+            ) from exc
 
     return recognized_text or ""
 
