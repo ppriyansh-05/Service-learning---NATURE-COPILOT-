@@ -36,12 +36,21 @@ async def lifespan(app: FastAPI):
     Shutdown: nothing to clean up.
     """
     try:
+        if settings.IS_PRODUCTION and not state_sync.is_enabled():
+            raise RuntimeError(
+                "Production persistence is unavailable. Configure DATABASE_URL and "
+                "ENABLE_STATE_SYNC=true before accepting field data."
+            )
         pulled = state_sync.pull_all()
         synced = [k for k, ok in pulled.items() if ok]
         if synced:
             log.info("state_sync: pulled %s from database", ", ".join(synced))
+        if settings.IS_PRODUCTION and not state_sync.is_enabled():
+            raise RuntimeError("Production persistence became unavailable during startup.")
     except Exception as e:
-        log.warning("state_sync: startup pull failed, using local JSON only (%s)", e)
+        log.critical("state_sync: production startup blocked to prevent non-persistent writes (%s)", e)
+        if settings.IS_PRODUCTION:
+            raise
     yield
 
 
