@@ -269,8 +269,15 @@ def extract_visible_image_geotag(file_path: str) -> Tuple[Optional[float], Optio
     votes: Dict[Tuple[float, float], int] = {}
     first_text: Dict[Tuple[float, float], str] = {}
     all_text = []
+    ocr_pass_errors = []
+
     for candidate in passes():
-        text = _ocr_image(candidate)
+        try:
+            text = _ocr_image(candidate)
+        except RuntimeError as exc:
+            ocr_pass_errors.append(str(exc))
+            continue
+
         if not text:
             continue
         all_text.append(text)
@@ -284,9 +291,17 @@ def extract_visible_image_geotag(file_path: str) -> Tuple[Optional[float], Optio
             return lat, lng, first_text[key]
 
     if votes:
-        # No two passes agreed: take the most frequent reading (earliest pass wins ties)
+        # No two passes agreed: take the most frequent reading (earliest pass wins ties).
+        # The UI must still require human confirmation for visible-image coordinates.
         (lat, lng) = max(votes, key=lambda k: votes[k])
         return lat, lng, first_text[(lat, lng)]
+
+    # Missing OCR runtime is an operational error, not evidence that the image
+    # contains no visible location. Surface it to the API instead of reporting
+    # a false "no GPS" result.
+    if ocr_pass_errors and not all_text:
+        raise RuntimeError("; ".join(dict.fromkeys(ocr_pass_errors)))
+
     if not all_text:
         return None, None, None
     return None, None, " | ".join(all_text)
