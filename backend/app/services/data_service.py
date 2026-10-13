@@ -901,6 +901,14 @@ class DataService:
                 raise ValueError("Use a valid iNaturalist observation URL, e.g. https://www.inaturalist.org/observations/123456.")
             target["observation_url"] = url
 
+        if "observation_type" in update_data and update_data["observation_type"] is not None:
+            observation_type = safe_str(update_data["observation_type"])
+            if observation_type not in {"sighted", "planted_rswf"}:
+                raise ValueError("observation_type must be 'sighted' or 'planted_rswf'.")
+            target["observation_type"] = observation_type
+            # This changes the observation classification only. It does not create or delete
+            # a managed planted-plant record or alter existing monitoring history.
+
         save_ngo_observations_store(ngo_records)
         return target
 

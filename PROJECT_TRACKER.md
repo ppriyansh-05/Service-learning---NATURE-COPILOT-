@@ -866,3 +866,11 @@ Key Changes:
 - Successful observations use the existing Pl@ntNet identification API separately; results display up to three predictions and an Edit action that opens the existing observation review/detail view. Pending GPS confirmation and prediction failures are shown per row.
 - Frontend app cache-buster updated.
 - JavaScript syntax check passed. Real uploads, API prediction response compatibility, browser behavior, and Render deployment have not yet been verified.
+
+
+### Follow-up — Editable Per-Photo Bulk Upload Review (2026-10-14)
+- Bulk results now retain each selected file's review state and provide per-row actions instead of only a single Edit button.
+- Nearby-plant duplicates can be retried as a separate observation after the user explicitly chooses **Keep as separate**; exact same-photo duplicates cannot be duplicated and instead open the existing observation. **Discard** removes the row from the review only and never deletes a saved record.
+- Saved NGO rows expose editable scientific/predicted name, common name, observation date, observer, notes, and record type (Sighted / Planted by RSWF). Saving a non-empty corrected scientific name also sends it through the existing human-verification workflow.
+- The NGO observation update schema/service now allow changing only the record type for NGO-owned records. This does not create/delete managed planted-plant records or alter monitoring history; iNaturalist reference records remain read-only.
+- Verification: source changes committed to this feature branch. No automated tests, browser runtime checks, live API tests, or Render deployment have been run. Rows awaiting GPS confirmation still require the existing confirmation workflow before record details can be saved; this is not claimed as verified.
