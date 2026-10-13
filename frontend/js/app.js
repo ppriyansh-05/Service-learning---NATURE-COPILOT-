@@ -834,8 +834,9 @@ const App = {
         (plantedRes.data || []).forEach(p => {
             if (p.latitude == null || p.longitude == null) return;
             const statusColor = { Alive: "#10b981", Dead: "#ef4444", Unknown: "#f97316" }[p.status] || "#94a3b8";
+            // RSWF-planted plants use a red fill; the outline still indicates health status.
             const marker = L.circleMarker([p.latitude, p.longitude], {
-                radius: 7, fillColor: "#3b82f6", color: statusColor, weight: 2.5, opacity: 1, fillOpacity: 0.9
+                radius: 7, fillColor: "#ef4444", color: statusColor, weight: 2.5, opacity: 1, fillOpacity: 0.9
             });
             marker.bindPopup(`
                 <div>
@@ -1705,6 +1706,9 @@ const App = {
                 if (confirmBox) confirmBox.style.display = "none";
                 if (aiContainer) aiContainer.style.display = "flex";
                 this.currentUploadedObsId = res.observation_id;
+                if (res.plant_code) {
+                    resultDetails.innerHTML += `<div style="margin-top:0.5rem;color:#f87171;font-weight:600">🌱 Registered for RSWF monitoring · Plant code: ${this.esc(res.plant_code)}. Species and planting date still need verification.</div>`;
+                }
 
                 await this.loadObservations();
                 await this.loadOverview();
@@ -1804,11 +1808,15 @@ const App = {
                 "RSWF Field Volunteer",
                 null,
                 !!this.pendingGeotagAllowNearby,
+                data.observation_type || "sighted",
             );
             this.pendingGeotagAllowNearby = false;
 
             this.currentUploadedObsId = res.observation_id;
             this.pendingGeotagData = null;
+            if (res.plant_code) {
+                this.notify(`🌱 Planted plant registered as ${res.plant_code}. Species and planting date still need RSWF verification.`, "success", 7000);
+            }
 
             resultTitle.innerHTML = "✅ Photo Observation Spatially Verified & Saved!";
             resultCard.style.background = "rgba(16, 185, 129, 0.1)";
