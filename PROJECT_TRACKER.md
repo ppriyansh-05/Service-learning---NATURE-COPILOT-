@@ -898,3 +898,8 @@ Key Changes:
 - The supplied backend logs showed successful health/readiness and several GET requests, but repeated `OPTIONS ... 400 Bad Request` for dashboard API routes. Confirm browser preflight requests succeed after the CORS setting is applied.
 - Handover is **not yet fully verified**: before importing the full field dataset, back up/export any existing records, test one genuine photo upload end-to-end, confirm its observation and photo persist after a restart/redeploy, and validate dataset counts, coordinates, species names, dates, duplicate handling, and zone assignment against source records. Do not fabricate records or claim these checks passed until performed.
 - The bulk uploader's frontend batch planner still caps each request at two files / about 10 MiB total; the 50 MB per-photo validation limit does not automatically raise that batch cap. Test a single larger photo separately only after CORS and normal small-photo upload work.
+
+### Handover update — CORS corrected and dataset uploaded (2026-10-14)
+- Project owner confirms the live Render `CORS_ORIGINS` setting has been corrected to the dashboard URL and the project dataset has been uploaded.
+- This is owner-reported status; the current browser session, dataset contents/counts, upload completeness, and live API responses have not been independently checked from this repository connection.
+- Remaining final checks: confirm the dashboard no longer produces CORS/preflight errors; verify the uploaded dataset against the source (record counts, species names, dates, coordinates and zone assignments); export a backup; and confirm saved observations/photos survive a backend restart/redeploy. Do not treat the upload as proof of persistence or data quality until these checks pass.
