@@ -214,6 +214,9 @@ def audit_all() -> Dict[str, Any]:
             status = "non_plantable_cell"
         elif not pres_sci:
             status = "empty_cell"
+        elif not _norm(p["scientific_name"]):
+            # Do not label an unidentified upload as a species mismatch.
+            status = "needs_review"
         elif _norm(pres_sci) == _norm(p["scientific_name"]):
             status = "correct"
         elif _norm(p["scientific_name"]) in rightful_cells:
@@ -248,6 +251,7 @@ def audit_all() -> Dict[str, Any]:
         "empty_cell": sum(1 for r in rows if r["status"] == "empty_cell"),
         "non_plantable_cell": sum(1 for r in rows if r["status"] == "non_plantable_cell"),
         "outside_plot": sum(1 for r in rows if r["status"] == "outside_plot"),
+        "needs_review": sum(1 for r in rows if r["status"] == "needs_review"),
     }
     return {"rows": rows, "summary": summary, "cells_filled_in_plan": sum(1 for c in grid["cells"] if c.get("scientific_name"))}
 
@@ -281,6 +285,8 @@ def heatmap() -> Dict[str, Any]:
             status = "non_plantable" if type_ == "non_plantable" else "void"
         elif here and any(_norm(x.get("scientific_name")) == _norm(pres) for x in here):
             status = "correct"
+        elif here and any(not _norm(x.get("scientific_name")) for x in here):
+            status = "needs_review"
         elif here:
             status = "wrong"
         else:
