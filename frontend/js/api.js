@@ -204,7 +204,7 @@ class ApiService {
         return await response.json();
     }
 
-    static async confirmGeotagLocation(photoUrl, latitude, longitude, observedOn = null, observer = "RSWF Field Volunteer", notes = null, allowNearbyDuplicate = false) {
+    static async confirmGeotagLocation(photoUrl, latitude, longitude, observedOn = null, observer = "RSWF Field Volunteer", notes = null, allowNearbyDuplicate = false, observationType = "sighted") {
         const q = allowNearbyDuplicate ? "?allow_nearby_duplicate=true" : "";
         return this.fetchJson(window.APP_CONFIG.getEndpoint("/observations/confirm-location" + q), {
             method: "POST",
@@ -215,7 +215,8 @@ class ApiService {
                 longitude: longitude,
                 observed_on: observedOn,
                 observer: observer,
-                notes: notes
+                notes: notes,
+                observation_type: observationType
             })
         });
     }

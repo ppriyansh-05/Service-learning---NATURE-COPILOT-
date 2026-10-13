@@ -834,8 +834,9 @@ const App = {
         (plantedRes.data || []).forEach(p => {
             if (p.latitude == null || p.longitude == null) return;
             const statusColor = { Alive: "#10b981", Dead: "#ef4444", Unknown: "#f97316" }[p.status] || "#94a3b8";
+            // RSWF-planted plants use a red fill; the outline still indicates health status.
             const marker = L.circleMarker([p.latitude, p.longitude], {
-                radius: 7, fillColor: "#3b82f6", color: statusColor, weight: 2.5, opacity: 1, fillOpacity: 0.9
+                radius: 7, fillColor: "#ef4444", color: statusColor, weight: 2.5, opacity: 1, fillOpacity: 0.9
             });
             marker.bindPopup(`
                 <div>
@@ -1705,6 +1706,9 @@ const App = {
                 if (confirmBox) confirmBox.style.display = "none";
                 if (aiContainer) aiContainer.style.display = "flex";
                 this.currentUploadedObsId = res.observation_id;
+                if (res.plant_code) {
+                    resultDetails.innerHTML += `<div style="margin-top:0.5rem;color:#f87171;font-weight:600">🌱 Registered for RSWF monitoring · Plant code: ${this.esc(res.plant_code)}. Species and planting date still need verification.</div>`;
+                }
 
                 await this.loadObservations();
                 await this.loadOverview();
@@ -1804,11 +1808,15 @@ const App = {
                 "RSWF Field Volunteer",
                 null,
                 !!this.pendingGeotagAllowNearby,
+                data.observation_type || "sighted",
             );
             this.pendingGeotagAllowNearby = false;
 
             this.currentUploadedObsId = res.observation_id;
             this.pendingGeotagData = null;
+            if (res.plant_code) {
+                this.notify(`🌱 Planted plant registered as ${res.plant_code}. Species and planting date still need RSWF verification.`, "success", 7000);
+            }
 
             resultTitle.innerHTML = "✅ Photo Observation Spatially Verified & Saved!";
             resultCard.style.background = "rgba(16, 185, 129, 0.1)";
@@ -2580,19 +2588,22 @@ const App = {
                 <div class="kpi-card"><div class="kpi-label">Correct</div><div class="kpi-value">${s.correct || 0}</div><div class="kpi-subtext">right species, right cell</div></div>
                 <div class="kpi-card attention"><div class="kpi-label">Wrong / misplaced</div><div class="kpi-value">${(s.wrong_species || 0) + (s.misplaced_species || 0)}</div><div class="kpi-subtext">need review</div></div>
                 <div class="kpi-card"><div class="kpi-label">Outside plot</div><div class="kpi-value">${s.outside_plot || 0}</div><div class="kpi-subtext">GPS not inside the 1-acre grid</div></div>
+                <div class="kpi-card"><div class="kpi-label">Needs identification</div><div class="kpi-value">${s.needs_review || 0}</div><div class="kpi-subtext">species not verified yet</div></div>
             `;
 
             // Grid heatmap (SVG for crispness and tooltips)
             grid.innerHTML = this._renderPlanGrid(hmap.cells || []);
 
             // Mismatch table
-            const bad = (audit.rows || []).filter(r => r.status === "wrong_species" || r.status === "misplaced_species");
+            const bad = (audit.rows || []).filter(r => ["wrong_species", "misplaced_species", "needs_review"].includes(r.status));
             mCount.textContent = `${bad.length} issue${bad.length === 1 ? "" : "s"}`;
             if (!bad.length) {
                 mBody.innerHTML = `<tr class="empty-row"><td colspan="6">No mismatches — every planted record matches the plan.</td></tr>`;
             } else {
                 mBody.innerHTML = bad.map(r => {
-                    const statusPill = r.status === "wrong_species"
+                    const statusPill = r.status === "needs_review"
+                        ? `<span class="pill pill-red">needs identification</span>`
+                        : r.status === "wrong_species"
                         ? `<span class="pill pill-orange">wrong species</span>`
                         : `<span class="pill pill-blue">misplaced</span>`;
                     const should = r.rightful_cells_for_species && r.rightful_cells_for_species.length
@@ -2635,6 +2646,7 @@ const App = {
         const legend = (st) => ({
             correct: "#22C55E",
             wrong: "#F97316",
+            needs_review: "#EF4444",
             missing: "rgba(255,255,255,0.06)",
             non_plantable: "#64748B",
             void: "rgba(255,255,255,0.02)",
@@ -2764,7 +2776,8 @@ Status: ${c.status}`;
         try {
             // fetch only NGO-uploaded observations (source != iNaturalist)
             const all = await ApiService.getObservations({ source: "NGO / New Upload", limit: 200 });
-            const items = (all.observations || all || []).filter(o => o.source !== "iNaturalist");
+            const records = Array.isArray(all) ? all : (all.data || all.observations || []);
+            const items = records.filter(o => o.source !== "iNaturalist");
             this._inatQueue = items;
             if (!items.length) {
                 empty.innerHTML = `<div style="font-size:2.5rem;margin-bottom:0.5rem">🌿</div><div>No RSWF-uploaded observations yet. Upload photos from the <b>Manage Plantations</b> tab and they will appear here.</div>`;
@@ -2819,6 +2832,7 @@ Status: ${c.status}`;
             <td>${statusBadge}</td>
             <td>
                 <button class="btn-action" style="font-size:0.78rem" onclick="App.openObservationDetail(${o.id})">View</button>
+                ${o.observation_url ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${this.esc(o.observation_url)}" target="_blank" rel="noopener">Manage on iNaturalist ↗</a>` : `<button class="btn-action" style="font-size:0.78rem" onclick="App.linkInaturalistRecord(${o.id})">Link submitted record</button>`}
                 ${o.verification_status !== 'confirmed' ? `<button class="btn-primary" style="font-size:0.78rem;padding:0.25rem 0.6rem" onclick="App._inatQuickConfirm(${i})">Confirm</button>` : ''}
             </td>
         </tr>`;
@@ -2848,6 +2862,24 @@ Status: ${c.status}`;
             this.notify(`Observation #${o.id} confirmed ✔`, "success");
             await this.loadInatUploadQueue();
         } catch (e) { this.notify(`Failed: ${e.message}`, "error"); }
+    },
+
+    async linkInaturalistRecord(obsId) {
+        if (!ApiService.getNgoPassword()) { this.openAuthModal(); return; }
+        const url = window.prompt("After submitting on iNaturalist, paste the new observation URL (https://www.inaturalist.org/observations/123456).");
+        if (url === null) return;
+        const clean = url.trim();
+        if (!/^https:\/\/www\.inaturalist\.org\/observations\/\d+(?:[?#].*)?$/.test(clean)) {
+            this.notify("Enter a valid iNaturalist observation URL.", "warning");
+            return;
+        }
+        try {
+            await ApiService.updateObservation(obsId, { observation_url: clean });
+            this.notify("iNaturalist record link saved. Use “Manage on iNaturalist” to edit or delete it on iNaturalist.", "success", 7000);
+            await this.loadInatUploadQueue();
+        } catch (e) {
+            this.notify(`Could not save iNaturalist link: ${e.message}`, "error");
+        }
     },
 
     async uploadSelectedToInat() {

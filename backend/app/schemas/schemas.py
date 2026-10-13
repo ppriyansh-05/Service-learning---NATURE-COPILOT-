@@ -173,6 +173,7 @@ class NGOObservationUpdate(BaseModel):
     observer: Optional[str] = Field(None, description="Observer name")
     notes: Optional[str] = Field(None, description="Observation notes")
     quality_grade: Optional[str] = Field(None, description="Quality grade")
+    observation_url: Optional[str] = Field(None, description="Submitted iNaturalist observation URL for RSWF uploads")
 
 class NGOObservationCreate(BaseModel):
     scientific_name: Optional[str] = Field(None, description="Species scientific name")
@@ -215,4 +216,5 @@ class GeotagLocationConfirmRequest(BaseModel):
     observed_on: Optional[str] = Field(None, description="Optional observation date YYYY-MM-DD")
     observer: Optional[str] = Field("RSWF Field Volunteer", description="Observer name")
     notes: Optional[str] = Field(None, description="Optional field remarks")
+    observation_type: Optional[str] = Field("sighted", description="sighted or planted_rswf")
 

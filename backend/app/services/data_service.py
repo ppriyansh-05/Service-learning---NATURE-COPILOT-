@@ -857,9 +857,7 @@ class DataService:
             if len(filtered) == len(ngo_records):
                 return False
 
-            with open(ngo_store_path, "w", encoding="utf-8") as f:
-                json.dump(filtered, f, indent=2)
-
+            save_ngo_observations_store(filtered)
             return True
         except Exception:
             return False
@@ -894,9 +892,15 @@ class DataService:
             if field in update_data and update_data[field] is not None:
                 target[field] = safe_str(update_data[field])
 
-        with open(ngo_store_path, "w", encoding="utf-8") as f:
-            json.dump(ngo_records, f, indent=2)
+        if "observation_url" in update_data and update_data["observation_url"] is not None:
+            url = safe_str(update_data["observation_url"])
+            prefix = "https://www.inaturalist.org/observations/"
+            observation_id = url[len(prefix):].split("?", 1)[0].split("#", 1)[0].strip("/") if url else ""
+            if not url.startswith(prefix) or not observation_id.isdigit():
+                raise ValueError("Use a valid iNaturalist observation URL, e.g. https://www.inaturalist.org/observations/123456.")
+            target["observation_url"] = url
 
+        save_ngo_observations_store(ngo_records)
         return target
 
     # =====================================================================
@@ -1158,6 +1162,54 @@ class DataService:
     # =====================================================================
 
     @staticmethod
+    def _register_planted_upload(ngo_observation: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Create one management record for an RSWF-planted upload without inventing species/date/health."""
+        if ngo_observation.get("observation_type") != "planted_rswf":
+            return None
+
+        plants = load_planted_plants_store()
+        observation_id = ngo_observation.get("id")
+        existing = next(
+            (p for p in plants if p.get("source_observation_id") == observation_id),
+            None,
+        )
+        if existing:
+            return existing
+
+        zone = str(ngo_observation.get("zone") or "").upper()
+        zone_letter = zone[-1] if zone in {"ZONE A", "ZONE B", "ZONE C"} else "X"
+        prefix = f"VU-{zone_letter}-"
+        used_codes = {
+            str(p.get("plant_code") or "").upper()
+            for p in plants
+        }
+        sequence = 1
+        while f"{prefix}{sequence:03d}" in used_codes:
+            sequence += 1
+
+        plant = {
+            "id": max((int(p.get("id", 0)) for p in plants), default=0) + 1,
+            "plant_code": f"{prefix}{sequence:03d}",
+            "source": "Planted Plants",
+            "source_observation_id": observation_id,
+            "scientific_name": None,
+            "common_name": None,
+            "planted_on": None,
+            "status": "Unknown",
+            "latitude": float(ngo_observation["latitude"]),
+            "longitude": float(ngo_observation["longitude"]),
+            "zone_code": ngo_observation.get("zone") or None,
+            "notes": "Created from RSWF-planted photo upload. Species, planting date, and health require RSWF verification.",
+            "photo_url": ngo_observation.get("photo_url"),
+            "watering_interval_days": None,
+            "last_watered_on": None,
+            "identification_status": "needs_review",
+        }
+        plants.append(plant)
+        save_planted_plants_store(plants)
+        return plant
+
+    @staticmethod
     def process_photo_upload(
         file_bytes: bytes,
         original_filename: str,
@@ -1248,6 +1300,7 @@ class DataService:
                 "requires_confirmation": True,
                 "observation_id": None,
                 "source": "NGO / New Upload",
+                "observation_type": observation_type or "sighted",
                 "latitude": lat,
                 "longitude": lng,
                 "zone": zone_name,
@@ -1287,6 +1340,7 @@ class DataService:
 
         ngo_records.append(ngo_obs)
         save_ngo_observations_store(ngo_records)
+        planted_record = DataService._register_planted_upload(ngo_obs)
 
         return {
             "success": True,
@@ -1295,6 +1349,8 @@ class DataService:
             "gps_description": gps_description,
             "requires_confirmation": False,
             "observation_id": new_id,
+            "plant_code": planted_record.get("plant_code") if planted_record else None,
+            "planted_plant_id": planted_record.get("id") if planted_record else None,
             "source": "NGO / New Upload",
             "latitude": lat,
             "longitude": lng,
@@ -1316,6 +1372,7 @@ class DataService:
         observer: Optional[str] = "RSWF Field Volunteer",
         notes: Optional[str] = None,
         allow_nearby_duplicate: bool = False,
+        observation_type: str = "sighted",
     ) -> Dict[str, Any]:
         """
         Creates an NGO observation record for user-confirmed image geotag coordinates.
@@ -1371,11 +1428,13 @@ class DataService:
             "zone_status": zone_status,
             "notes": notes,
             "photo_sha256": sha256_hex,
-            "photo_dhash": dhash_hex
+            "photo_dhash": dhash_hex,
+            "observation_type": observation_type or "sighted",
         }
 
         ngo_records.append(ngo_obs)
         save_ngo_observations_store(ngo_records)
+        planted_record = DataService._register_planted_upload(ngo_obs)
 
         return {
             "success": True,
@@ -1384,6 +1443,8 @@ class DataService:
             "gps_description": "GPS detected from visible geotag on image (User Confirmed)",
             "requires_confirmation": False,
             "observation_id": new_id,
+            "plant_code": planted_record.get("plant_code") if planted_record else None,
+            "planted_plant_id": planted_record.get("id") if planted_record else None,
             "source": "NGO / New Upload",
             "latitude": round(latitude, 6),
             "longitude": round(longitude, 6),

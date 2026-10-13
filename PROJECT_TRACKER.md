@@ -809,3 +809,16 @@ Key Changes:
 - Prepared correction on branch `fix/dockerfile-line-continuations`: normalize the affected continuation points to one backslash per line. The change is limited to Dockerfile syntax.
 - Verification status: this environment has not run a Docker build. Deployment remains unverified until Render builds the corrected commit.
 - No production data was changed or test observations uploaded.
+
+---
+
+### Follow-up UX and Data Integrity Fixes — 2026-10-14
+- **Duplicate compliance counts:** `compliance_service._collect_planted()` previously counted both the managed planted-plant register and every GPS-tagged NGO observation as separate plants. Compliance now counts only managed planted-plant records; sightings remain in observation views. This prevents one physical plant/photo represented in both stores from being counted twice.
+- **Automatic RSWF planted registration:** uploads explicitly marked `planted_rswf` now create a linked planted-plant management record after the observation is saved, including after visible-geotag confirmation. The generated code format is `VU-A-001` / `VU-B-001` / `VU-C-001` (or `VU-X-001` when not assigned to an active zone). Species and planting date are left blank; health is `Unknown`; the record is flagged `needs_review`. No species, planting date, or health was fabricated. The unknown status suppresses watering reminders until RSWF staff verify the record.
+- **Compliance unknowns:** unidentified managed plants are now marked `needs_review` rather than incorrectly classified as a wrong species. The compliance UI exposes a “Needs identification” count and red review status.
+- **Map:** managed RSWF planted plants now use red marker fills; the outline continues to indicate health status.
+- **iNaturalist queue:** fixed response parsing to read the API's `data` array, which could prevent the upload queue from loading. The navigation item already exists in the sidebar.
+- **iNaturalist submission workflow:** the existing button opens prefilled iNaturalist draft pages; it does not submit automatically. Added a flow to save the resulting iNaturalist observation URL against the NGO record and open that record externally for edits/deletion. Direct remote editing/deletion from Nature Copilot is not implemented because the app does not currently have iNaturalist OAuth/API write authorization.
+- **State sync:** NGO observation edits/deletes now use the shared save helper so changes are also pushed to configured cloud state sync. Photo objects are not automatically deleted as part of record deletion.
+- **Data safety:** no production data was deleted, no live test records/photos were created, and no iNaturalist reference data was changed.
+- **Verification:** code reviewed through GitHub. No local test suite, frontend runtime test, live API test, or deployment was run from this environment. Changes remain on branch `fix/planted-registration-compliance-inat-ux` pending review and deployment.

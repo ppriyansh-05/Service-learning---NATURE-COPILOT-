@@ -146,7 +146,13 @@ def cell_center(cell: int, calibration: Optional[Dict[str, Any]] = None) -> Opti
 # Data collection — planted plants + NGO observations
 # ---------------------------------------------------------------------------
 def _collect_planted() -> List[Dict[str, Any]]:
-    """Combined list of plants and NGO observations that have GPS."""
+    """Return one row per managed planted-plant record.
+
+    Field observations are evidence/photos, not separate physical plants. Counting
+    them here as well as the linked planted-plant register double-counts one tree.
+    Sightings remain available in the observations/map views but do not count as
+    planted interventions unless registered in the planted-plant store.
+    """
     out: List[Dict[str, Any]] = []
     for p in load_planted_plants_store():
         if p.get("latitude") is None or p.get("longitude") is None:
@@ -160,21 +166,8 @@ def _collect_planted() -> List[Dict[str, Any]]:
             "latitude": p.get("latitude"),
             "longitude": p.get("longitude"),
             "zone_code": p.get("zone_code"),
-            "grid_cell_override": p.get("grid_cell"),  # manual override if present
-        })
-    for o in load_ngo_observations_store():
-        if o.get("latitude") is None or o.get("longitude") is None:
-            continue
-        out.append({
-            "source": "ngo",
-            "id": o.get("id"),
-            "label": f"OBS-{o.get('id')}",
-            "scientific_name": (o.get("scientific_name") or "").strip(),
-            "common_name": (o.get("common_name") or "").strip(),
-            "latitude": o.get("latitude"),
-            "longitude": o.get("longitude"),
-            "zone_code": o.get("zone") or o.get("zone_code"),
-            "grid_cell_override": o.get("grid_cell"),
+            "grid_cell_override": p.get("grid_cell"),
+            "identification_status": p.get("identification_status", "needs_review"),
         })
     return out
 
@@ -221,6 +214,9 @@ def audit_all() -> Dict[str, Any]:
             status = "non_plantable_cell"
         elif not pres_sci:
             status = "empty_cell"
+        elif not _norm(p["scientific_name"]):
+            # Do not label an unidentified upload as a species mismatch.
+            status = "needs_review"
         elif _norm(pres_sci) == _norm(p["scientific_name"]):
             status = "correct"
         elif _norm(p["scientific_name"]) in rightful_cells:
@@ -255,6 +251,7 @@ def audit_all() -> Dict[str, Any]:
         "empty_cell": sum(1 for r in rows if r["status"] == "empty_cell"),
         "non_plantable_cell": sum(1 for r in rows if r["status"] == "non_plantable_cell"),
         "outside_plot": sum(1 for r in rows if r["status"] == "outside_plot"),
+        "needs_review": sum(1 for r in rows if r["status"] == "needs_review"),
     }
     return {"rows": rows, "summary": summary, "cells_filled_in_plan": sum(1 for c in grid["cells"] if c.get("scientific_name"))}
 
@@ -288,6 +285,8 @@ def heatmap() -> Dict[str, Any]:
             status = "non_plantable" if type_ == "non_plantable" else "void"
         elif here and any(_norm(x.get("scientific_name")) == _norm(pres) for x in here):
             status = "correct"
+        elif here and any(not _norm(x.get("scientific_name")) for x in here):
+            status = "needs_review"
         elif here:
             status = "wrong"
         else:

@@ -721,6 +721,7 @@ a { color: var(--primary); }
 .pill-green { background: rgba(16, 185, 129, 0.15); color: #34d399; }
 .pill-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
 .pill-orange { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
+.pill-red { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 .pill-purple { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; }
 .pill-grey { background: rgba(148, 163, 184, 0.12); color: #cbd5e1; }
 
