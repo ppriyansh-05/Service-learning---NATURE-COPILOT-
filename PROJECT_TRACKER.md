@@ -827,3 +827,11 @@ Key Changes:
 - Exposed the persisted `observation_type` in observation GeoJSON and changed the Biodiversity Map marker fill to red only for RSWF uploads explicitly marked `planted_rswf`. Other RSWF sightings remain orange and iNaturalist observations remain green; the separate planted-register markers remain red as well.
 - Renamed the UI action from “Upload Selected to iNaturalist” to “Prepare iNaturalist Drafts” to accurately describe its current behavior. It opens prefilled iNaturalist creation pages; a user must sign in, review, attach/confirm photos and submit on iNaturalist. The app does not yet perform an authenticated API upload.
 - Verification: source edits committed to the existing feature branch. No runtime tests or deployment were run.
+
+### Follow-up — iNaturalist Verification Queue — 2026-10-14
+- The queue now reads the actual `identification_status` field written by the RSWF verification workflow (rather than relying only on the unrelated `verification_status` field). Verified/corrected observations are labelled accurately.
+- Unverified observations remain visible for transparency but their selection checkboxes are disabled. Only verified/corrected records can be used to prepare iNaturalist draft pages.
+- Button copy now says “Prepare Selected Verified Drafts” to avoid implying an API submission. The app still opens prefilled iNaturalist pages; user review and submission on iNaturalist are required.
+- The dashboard screenshot showing “Loading…” appears to be the deployed version, while these fixes are on the unmerged feature branch. The queue fixes will not appear in production until the PR is reviewed, merged, and deployed.
+- Direct API submission is not implemented. iNaturalist write endpoints require authenticated authorization; no OAuth flow or user token storage has been added. Existing API read/import functionality is separate.
+- Verification: GitHub source inspection and edits only. No live API tests, automated tests, or deployment performed.
