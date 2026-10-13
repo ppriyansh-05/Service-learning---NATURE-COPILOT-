@@ -15,7 +15,7 @@ from PIL import Image, ExifTags, ImageOps
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB limit
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB limit
 
 def validate_upload_file(filename: str, content_type: str, file_size: int):
     """Validates file extension, MIME type, and maximum file size."""
@@ -27,7 +27,7 @@ def validate_upload_file(filename: str, content_type: str, file_size: int):
 
     if file_size > MAX_FILE_SIZE:
         raise ValueError(
-            f"File size ({file_size / (1024*1024):.2f} MB) exceeds maximum allowed limit of 10 MB."
+            f"File size ({file_size / (1024*1024):.2f} MB) exceeds maximum allowed limit of 50 MB."
         )
 
 def generate_safe_filename(original_filename: str) -> str:
