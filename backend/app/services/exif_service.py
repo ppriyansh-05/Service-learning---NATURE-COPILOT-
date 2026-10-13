@@ -344,32 +344,28 @@ def _ocr_image(img: Image.Image) -> str:
             except OSError:
                 pass
 
-    # Secondary OCR fallback: pytesseract is cross-platform and is the deployed
-    # Linux path. Keep the OCR configuration explicit because geotag text is a
-    # short, high-contrast numeric label rather than paragraph text.
+    # Secondary OCR fallback: Linux deployments use pytesseract + Tesseract.
+    # Try a sparse-text mode first for GPS Map Camera overlays, then a single
+    # block mode as a fallback for denser location stamps.
     if not recognized_text:
         try:
             import pytesseract
             from pytesseract import TesseractNotFoundError
-
-            try:
-                recognized_text = pytesseract.image_to_string(
-                    img,
-                    config="--oem 3 --psm 11",
-                    timeout=8,
-                )
-            except TesseractNotFoundError:
-                # Let the caller distinguish missing OCR runtime from a photo
-                # that truly has no visible geotag.
-                raise RuntimeError(
-                    "Visible GPS text could not be checked because the Tesseract OCR executable is unavailable."
-                )
         except ImportError as exc:
             raise RuntimeError(
-                "Visible GPS text could not be checked because pytesseract is not installed."
+                "Visible GPS text could not be checked: pytesseract is not installed."
             ) from exc
-        except RuntimeError:
-            raise
+
+        try:
+            for config in ("--oem 3 --psm 11", "--oem 3 --psm 6"):
+                candidate_text = pytesseract.image_to_string(img, config=config, timeout=8)
+                if candidate_text.strip():
+                    recognized_text = candidate_text
+                    break
+        except TesseractNotFoundError as exc:
+            raise RuntimeError(
+                "Visible GPS text could not be checked: the Tesseract OCR executable is unavailable."
+            ) from exc
         except Exception as exc:
             raise RuntimeError(
                 f"Visible GPS OCR failed: {type(exc).__name__}: {exc}"
