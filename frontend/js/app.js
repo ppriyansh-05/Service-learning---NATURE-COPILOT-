@@ -801,10 +801,11 @@ const App = {
                 const [lng, lat] = feat.geometry.coordinates;
                 const props = feat.properties;
                 const isNgo = props.source === "NGO / New Upload";
+                const isRswfPlanted = isNgo && props.observation_type === "planted_rswf";
 
                 const circleMarker = L.circleMarker([lat, lng], {
                     radius: isNgo ? 7 : 6,
-                    fillColor: isNgo ? "#f97316" : "#10b981",
+                    fillColor: isRswfPlanted ? "#ef4444" : (isNgo ? "#f97316" : "#10b981"),
                     color: "#ffffff",
                     weight: 1,
                     opacity: 1,
@@ -821,7 +822,7 @@ const App = {
                         ${popupRow("Observed", this.esc(props.observed_on))}
                         ${popupRow("Observer", this.esc(props.observer))}
                         ${popupRow("Zone", this.esc(props.zone || "Outside active zones"))}
-                        ${popupRow("Source", isNgo ? "RSWF field upload" : "iNaturalist")}
+                        ${popupRow("Source", isRswfPlanted ? "RSWF planted plant" : (isNgo ? "RSWF field upload" : "iNaturalist"))}
                         ${props.id ? `<div style="margin-top:6px"><button class="link-btn" onclick="App.openObservationDetail(${Number(props.id)})">View full details →</button></div>` : ""}
                     </div>
                 `;
@@ -2777,10 +2778,13 @@ Status: ${c.status}`;
             // fetch only NGO-uploaded observations (source != iNaturalist)
             const all = await ApiService.getObservations({ source: "NGO / New Upload", limit: 200 });
             const records = Array.isArray(all) ? all : (all.data || all.observations || []);
-            const items = records.filter(o => o.source !== "iNaturalist");
+            // Only planted-tree uploads belong in this workflow. Sightings stay in Observations.
+            const items = records.filter(o =>
+                o.source !== "iNaturalist" && o.observation_type === "planted_rswf"
+            );
             this._inatQueue = items;
             if (!items.length) {
-                empty.innerHTML = `<div style="font-size:2.5rem;margin-bottom:0.5rem">🌿</div><div>No RSWF-uploaded observations yet. Upload photos from the <b>Manage Plantations</b> tab and they will appear here.</div>`;
+                empty.innerHTML = `<div style="font-size:2.5rem;margin-bottom:0.5rem">🌱</div><div>No RSWF planted-tree uploads found. Upload a tree photo and mark it as <strong>Planted by RSWF</strong>. After an NGO reviewer verifies its species, it will be selectable here for iNaturalist.</div>`;
                 return;
             }
             empty.style.display = "none";
@@ -2796,7 +2800,7 @@ Status: ${c.status}`;
                         <th>Type</th>
                         <th>Date</th>
                         <th>Zone</th>
-                        <th>Status</th>
+                        <th>Verification / iNaturalist</th>
                         <th>Actions</th>
                     </tr></thead>
                     <tbody id="inat-queue-tbody">${items.map((o, i) => this._inatQueueRow(o, i)).join("")}</tbody>
@@ -2816,14 +2820,22 @@ Status: ${c.status}`;
         const typeLabel = o.observation_type === "planted_rswf"
             ? `<span class="pill pill-green">🌱 Planted</span>`
             : `<span class="pill pill-orange">👁️ Sighted</span>`;
-        const status = o.verification_status || "pending";
-        const statusBadge = status === "confirm" || status === "confirmed"
-            ? `<span class="pill pill-green">✅ Confirmed</span>`
-            : status === "needs_review"
-            ? `<span class="pill pill-orange">⚠️ Needs review</span>`
-            : `<span class="pill pill-grey">${status}</span>`;
+        const status = String(o.identification_status || o.verification_status || "pending").toLowerCase();
+        const verified = ["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase());
+        const uploaded = Boolean(o.observation_url);
+        const statusBadge = uploaded
+            ? `<span class="pill pill-green">✓ Uploaded to iNaturalist</span>`
+            : ["verified", "corrected", "confirmed"].includes(status)
+                ? `<span class="pill pill-green">${status === "corrected" ? "Corrected & verified" : "Verified"}</span>`
+                : status === "needs_review"
+                    ? `<span class="pill pill-orange">⚠️ Needs review</span>`
+                    : `<span class="pill pill-grey">Pending verification</span>`;
+        const selectDisabled = !verified || uploaded;
+        const selectTitle = uploaded
+            ? "Already linked to an iNaturalist observation"
+            : "NGO verification is required before preparing an iNaturalist draft";
         return `<tr id="inat-row-${i}">
-            <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" onchange="App._updateInatSelectedCount()"></td>
+            <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" ${selectDisabled ? `disabled title="${selectTitle}"` : ""} onchange="App._updateInatSelectedCount()"></td>
             <td>${photo}</td>
             <td style="font-size:0.82rem">${this.esc(o.scientific_name || '—')}<br><span class="muted">${this.esc(o.common_name || '')}</span></td>
             <td>${typeLabel}</td>
@@ -2832,7 +2844,7 @@ Status: ${c.status}`;
             <td>${statusBadge}</td>
             <td>
                 <button class="btn-action" style="font-size:0.78rem" onclick="App.openObservationDetail(${o.id})">View</button>
-                ${o.observation_url ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${this.esc(o.observation_url)}" target="_blank" rel="noopener">Manage on iNaturalist ↗</a>` : `<button class="btn-action" style="font-size:0.78rem" onclick="App.linkInaturalistRecord(${o.id})">Link submitted record</button>`}
+                ${o.observation_url ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${this.esc(o.observation_url)}" target="_blank" rel="noopener">View iNaturalist record ↗</a>` : `<button class="btn-action" style="font-size:0.78rem" onclick="App.linkInaturalistRecord(${o.id})">Link submitted record</button>`}
                 ${o.verification_status !== 'confirmed' ? `<button class="btn-primary" style="font-size:0.78rem;padding:0.25rem 0.6rem" onclick="App._inatQuickConfirm(${i})">Confirm</button>` : ''}
             </td>
         </tr>`;
@@ -2886,14 +2898,23 @@ Status: ${c.status}`;
         const checked = document.querySelectorAll(".inat-select-cb:checked");
         if (!checked.length) { this.notify("Select at least one observation first.", "warning"); return; }
         const ids = Array.from(checked).map(cb => cb.dataset.id);
-        const items = (this._inatQueue || []).filter(o => ids.includes(String(o.id)));
+        const items = (this._inatQueue || []).filter(o =>
+            ids.includes(String(o.id)) &&
+            o.observation_type === "planted_rswf" &&
+            !o.observation_url &&
+            ["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase())
+        );
+        if (!items.length) {
+            this.notify("Only species-verified observations can be prepared for iNaturalist. Verify the species first.", "warning", 7000);
+            return;
+        }
 
-        // Build iNaturalist create-observation URLs for each item
+        // Prepare iNaturalist draft pages; the user must review and submit on iNaturalist.
         const links = items.map(o => {
             const params = new URLSearchParams({
                 taxon_name: o.scientific_name || "",
                 observed_on_string: o.observed_on || "",
-                description: o.notes || `Observed at Van Udyan, Bavdhan, Pune by RSWF. Zone: ${o.zone || 'unknown'}.`,
+                description: o.notes || `Tree planted by RSWF at Van Udyan, Bavdhan, Pune. NGO species verification completed. Zone: ${o.zone || 'unknown'}.`,
                 place_guess: "Bavdhan Van Udyan, Pune, Maharashtra, India",
                 latitude: o.latitude || "",
                 longitude: o.longitude || "",
@@ -2904,7 +2925,7 @@ Status: ${c.status}`;
 
         // Open iNaturalist tabs and show user a summary
         links.forEach(l => window.open(l.url, "_blank"));
-        this.notify(`🌿 Opened ${links.length} iNaturalist upload page${links.length > 1 ? 's' : ''} in new tabs. Fill in any remaining details and submit on iNaturalist.`, "success", 8000);
+        this.notify(`🌱 Opened ${links.length} verified planted-tree draft page${links.length > 1 ? 's' : ''} in new tabs. Sign in there, attach the tree photo, review the details, and press Submit on iNaturalist.`, "success", 8000);
     },
 
     // Keep old verification queue functions for backward compat (no longer shown in nav)

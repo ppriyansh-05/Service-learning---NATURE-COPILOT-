@@ -822,3 +822,40 @@ Key Changes:
 - **State sync:** NGO observation edits/deletes now use the shared save helper so changes are also pushed to configured cloud state sync. Photo objects are not automatically deleted as part of record deletion.
 - **Data safety:** no production data was deleted, no live test records/photos were created, and no iNaturalist reference data was changed.
 - **Verification:** code reviewed through GitHub. No local test suite, frontend runtime test, live API test, or deployment was run from this environment. Changes remain on branch `fix/planted-registration-compliance-inat-ux` pending review and deployment.
+
+### Follow-up — Biodiversity Map and iNaturalist Button Clarity — 2026-10-14
+- Exposed the persisted `observation_type` in observation GeoJSON and changed the Biodiversity Map marker fill to red only for RSWF uploads explicitly marked `planted_rswf`. Other RSWF sightings remain orange and iNaturalist observations remain green; the separate planted-register markers remain red as well.
+- Renamed the UI action from “Upload Selected to iNaturalist” to “Prepare iNaturalist Drafts” to accurately describe its current behavior. It opens prefilled iNaturalist creation pages; a user must sign in, review, attach/confirm photos and submit on iNaturalist. The app does not yet perform an authenticated API upload.
+- Verification: source edits committed to the existing feature branch. No runtime tests or deployment were run.
+
+### Follow-up — iNaturalist Verification Queue — 2026-10-14
+- The queue now reads the actual `identification_status` field written by the RSWF verification workflow (rather than relying only on the unrelated `verification_status` field). Verified/corrected observations are labelled accurately.
+- Unverified observations remain visible for transparency but their selection checkboxes are disabled. Only verified/corrected records can be used to prepare iNaturalist draft pages.
+- Button copy now says “Prepare Selected Verified Drafts” to avoid implying an API submission. The app still opens prefilled iNaturalist pages; user review and submission on iNaturalist are required.
+- The dashboard screenshot showing “Loading…” appears to be the deployed version, while these fixes are on the unmerged feature branch. The queue fixes will not appear in production until the PR is reviewed, merged, and deployed.
+- Direct API submission is not implemented. iNaturalist write endpoints require authenticated authorization; no OAuth flow or user token storage has been added. Existing API read/import functionality is separate.
+- Verification: GitHub source inspection and edits only. No live API tests, automated tests, or deployment performed.
+
+- **Verification persistence follow-up:** RSWF verification now looks up the observation in the NGO-owned store first, preventing numeric ID collisions with iNaturalist reference rows. It saves verification via `save_ngo_observations_store()` so configured cloud state sync receives the verified status. Missing NGO records fail clearly rather than accidentally targeting a reference record.
+
+### Follow-up — Verified Planted-Tree iNaturalist Queue — 2026-10-14
+- Narrowed the iNaturalist upload queue to RSWF-owned observations explicitly marked `observation_type = planted_rswf`; ordinary sightings and public iNaturalist reference observations are excluded.
+- A planted-tree row remains visible while pending, but selection is enabled only after the NGO identification status is `verified` or `corrected`. The action rechecks those conditions before opening drafts.
+- The action opens prefilled iNaturalist observation-creation pages. The reviewer must sign in on iNaturalist, attach/review the photo and metadata, and submit there. Nature Copilot does not collect iNaturalist credentials or directly publish through the API.
+- Verification status: source changes committed on the feature branch only. No automated tests, live iNaturalist submission, or production deployment were run from this environment.
+
+---
+
+### Follow-up — iNaturalist Status Without Affecting Plant Care — 2026-10-14
+- **iNaturalist Upload Queue UI:** A planted-tree NGO observation with a saved valid `observation_url` now displays **Uploaded to iNaturalist** and offers a direct link to the external record.
+- **Duplicate submission guard:** Records already linked to iNaturalist are no longer selectable for preparing another draft from the queue.
+- **Record ownership:** The upload link remains attached to the existing NGO observation; this UI change does not create another observation or delete/replace the planted-plant management record.
+- **Monitoring and watering:** No planted-plant records, plant status, watering fields, or monitoring history are changed by saving an iNaturalist observation URL. The existing planted-plant register remains the source for care and watering workflows.
+- **Verification status:** Code committed to `fix/planted-registration-compliance-inat-ux`. No automated tests, browser runtime checks, or deployment were run for this follow-up. The change is not live until the branch is merged and the relevant deployment completes.
+
+
+### Final pre-dataset review — 2026-10-14
+- **Biodiversity Map legend:** Changed the “RSWF planted plant” legend dot from blue to red, matching the red fill used for planted-plant map markers. RSWF planted observations marked `planted_rswf` also use red; other RSWF field uploads remain orange and iNaturalist observations remain green.
+- **Static false-data check:** The tracked `data/processed/planted_plants_store.json`, `data/processed/ngo_observations_store.json`, and `data/processed/plant_monitoring_store.json` files are empty arrays (`[]`) on this branch. The planted-plant fallback defaults in `data_service.py` are also empty. No sample plant or NGO observation records were found in those inspected stores.
+- **Limits:** This was a GitHub source/data-file inspection, not a runtime audit. Production database/cloud-sync contents, deployed frontend/backend, uploaded user dataset, generated exports, and all repository files have not been exhaustively verified. No automated tests or live API checks were run, and nothing was deployed.
+- **Next required step:** Import only the genuine dataset collected by the team; reconcile duplicates and validate species, dates, photos, coordinates and zone assignments against source records before publishing eligible observations to iNaturalist. Do not create placeholder or synthetic production records.
