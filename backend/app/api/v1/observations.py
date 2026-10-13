@@ -5,13 +5,13 @@ POST /api/v1/observations/upload (EXIF GPS photo upload pipeline),
 and provenance protection preventing modification of original iNaturalist records.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status, Response
 from typing import List as _List
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.db.session import get_db
 from app.schemas.schemas import (
-    PaginatedObservationsResponse, ObservationResponse, NGOObservationCreate, GeotagLocationConfirmRequest
+    PaginatedObservationsResponse, ObservationResponse, NGOObservationCreate, NGOObservationUpdate, GeotagLocationConfirmRequest
 )
 from app.services.data_service import DataService, DuplicateObservationError
 
@@ -89,6 +89,7 @@ async def upload_photo_observation(
             "that close together and you want to record the new one anyway."
         ),
     ),
+    observation_type: Optional[str] = Form(None, description="sighted or planted_rswf"),
 ):
     """
     Upload a plant/biodiversity photo.
@@ -106,6 +107,7 @@ async def upload_photo_observation(
             contents, filename, content_type,
             confirm_location=confirm_location,
             allow_nearby_duplicate=allow_nearby_duplicate,
+            observation_type=observation_type or "sighted",
         )
         if not res.get("success"):
             raise HTTPException(
@@ -161,6 +163,7 @@ def confirm_geotag_location(
 async def bulk_upload_photos(
     files: _List[UploadFile] = File(..., description="Up to 50 photos — EXIF/GPS, zone, dedup are run per file"),
     allow_nearby_duplicate: bool = Query(False, description="Skip the 1 m same-plant guard for every file"),
+    observation_type: Optional[str] = Form(None, description="sighted or planted_rswf (applied to all files in batch)"),
 ):
     """
     Batch EXIF/GPS pipeline for a folder-drop of photos.
@@ -192,6 +195,7 @@ async def bulk_upload_photos(
                 contents, name, ctype,
                 confirm_location=False,
                 allow_nearby_duplicate=allow_nearby_duplicate,
+                observation_type=observation_type or "sighted",
             )
             results.append({"filename": name, "ok": True, **res})
         except DuplicateObservationError as de:
@@ -282,6 +286,27 @@ def verify_observation_identification(
             notes=req.notes
         )
         return record
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.put("/{id}", response_model=ObservationResponse)
+def update_observation(
+    id: int,
+    data: NGOObservationUpdate,
+    auth: str = Depends(verify_ngo_admin_password)
+):
+    """
+    Update an NGO observation record (Password Protected).
+    iNaturalist records are permanently read-only reference data and cannot be modified (HTTP 403).
+    """
+    try:
+        DataService.protect_inaturalist_record(id)
+        updated = DataService.update_ngo_observation(id, data.model_dump())
+        return updated
+    except KeyError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValueError as e:

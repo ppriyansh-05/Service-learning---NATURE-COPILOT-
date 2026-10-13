@@ -166,6 +166,14 @@ class PaginatedPlantedPlantsResponse(BaseModel):
     total_pages: int
     data: List[PlantedPlantResponse]
 
+class NGOObservationUpdate(BaseModel):
+    scientific_name: Optional[str] = Field(None, description="Species scientific name")
+    common_name: Optional[str] = Field(None, description="Species common name")
+    observed_on: Optional[str] = Field(None, description="ISO date format YYYY-MM-DD")
+    observer: Optional[str] = Field(None, description="Observer name")
+    notes: Optional[str] = Field(None, description="Observation notes")
+    quality_grade: Optional[str] = Field(None, description="Quality grade")
+
 class NGOObservationCreate(BaseModel):
     scientific_name: Optional[str] = Field(None, description="Species scientific name")
     common_name: Optional[str] = Field(None, description="Species common name")

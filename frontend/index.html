@@ -69,7 +69,7 @@
             </li>
             <li class="nav-item">
                 <button data-tab="verify">
-                    <span>✅</span> Verify
+                    <span>🌿</span> iNaturalist Upload
                 </button>
             </li>
             <li class="nav-item">
@@ -401,25 +401,34 @@
             </div>
         </section>
 
-        <!-- VERIFY TAB — queue + keyboard shortcuts -->
+        <!-- iNATURALIST UPLOAD TAB — select newly uploaded NGO records and push to iNaturalist -->
         <section id="tab-verify" class="tab-pane">
             <div class="section-header">
                 <div>
-                    <h2>Verification Queue</h2>
-                    <p>Review the next field upload: press <kbd>C</kbd> confirm, <kbd>X</kbd> correct, <kbd>R</kbd> needs review, <kbd>→</kbd> skip, <kbd>←</kbd> previous. Requires unlock.</p>
+                    <h2>🌿 Upload to iNaturalist</h2>
+                    <p>Review your recently uploaded field observations below. Select the ones you want to share publicly, verify the species ID, then click <strong>Upload Selected to iNaturalist</strong>. Only RSWF-uploaded records (not iNaturalist reference data) appear here.</p>
                 </div>
                 <div class="section-actions">
-                    <button class="btn-primary" onclick="App.loadVerificationQueue()">↻ Refresh queue</button>
+                    <button class="btn-primary" onclick="App.loadInatUploadQueue()">↻ Refresh</button>
+                    <button class="btn-primary btn-blue" id="btn-upload-to-inat" onclick="App.uploadSelectedToInat()" style="display:none">🌿 Upload Selected to iNaturalist</button>
                 </div>
             </div>
 
-            <div id="verify-stage" class="panel" style="min-height:420px">
-                <div id="verify-empty" class="muted" style="padding:3rem 1rem; text-align:center">Loading queue…</div>
-                <div id="verify-card" style="display:none"></div>
+            <div class="note-card" style="margin-top:0;margin-bottom:1rem">
+                <strong>How this works:</strong> Your uploaded photos are stored privately in the RSWF database. Once you are satisfied with the species identification, select observations here and upload them to <strong>iNaturalist</strong> for community validation and public biodiversity records. iNaturalist-fetched reference records (shown in Observations tab) are <em>read-only</em> and are <strong>not</strong> shown here.
             </div>
 
-            <div class="note-card" style="margin-top:1rem">
-                <strong>Shortcuts:</strong> <kbd>C</kbd> confirms the current scientific name · <kbd>X</kbd> opens the correct-species picker · <kbd>R</kbd> flags for later · <kbd>→</kbd> skip without saving · <kbd>←</kbd> go back one. Clicking the photo opens it full-size.
+            <!-- Selection bar -->
+            <div id="inat-select-bar" style="display:none; margin-bottom:0.75rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.85rem">
+                    <input type="checkbox" id="inat-select-all" onchange="App.inatToggleSelectAll(this.checked)"> Select all
+                </label>
+                <span id="inat-selected-count" class="muted" style="font-size:0.82rem">0 selected</span>
+            </div>
+
+            <div id="inat-queue-container" class="panel" style="min-height:300px;padding:0">
+                <div id="inat-queue-empty" class="muted" style="padding:3rem 1rem; text-align:center">Loading…</div>
+                <div id="inat-queue-list"></div>
             </div>
         </section>
 
@@ -475,10 +484,8 @@
                     <p>Add and update RSWF planted plants, log health-check visits and upload field photos. iNaturalist records are protected reference data and cannot be edited.</p>
                 </div>
                 <div class="section-actions">
-                    <button class="btn-primary" onclick="App.openAddPlantModal()">🌱 Add Planted Plant</button>
-                    <button class="btn-primary btn-blue" onclick="App.openAddNgoObsModal()">📝 Add Field Sighting</button>
-                    <button class="btn-primary btn-purple" onclick="App.openUploadPhotoModal()">📷 Upload Geotagged Photo</button>
-                    <button class="btn-primary btn-amber" onclick="App.openBulkUploadModal()">📂 Bulk Upload</button>
+                    <button class="btn-primary btn-purple" onclick="App.openUploadPhotoModal()" title="Upload a single geotagged photo — GPS is read automatically, you can then edit details and run AI species prediction">📷 Single Photo Upload</button>
+                    <button class="btn-primary btn-amber" onclick="App.openBulkUploadModal()" title="Upload many photos at once — review each result, edit details and run AI prediction per photo">📂 Bulk Upload</button>
                 </div>
             </div>
 
@@ -845,6 +852,20 @@
                 The location is read automatically from the photo's <b>GPS data</b> or from a <b>printed location stamp</b> (e.g. GPS Map Camera), then checked against the Van Udyan boundary. Afterwards you can ask the AI to suggest the species.
             </p>
 
+            <!-- Observation type selector -->
+            <div class="form-group">
+                <label for="upload-obs-type">What kind of record is this? <span class="req">*</span></label>
+                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:0.4rem">
+                    <label style="display:flex;align-items:center;gap:0.45rem;cursor:pointer;padding:0.5rem 0.85rem;border:1.5px solid var(--border-color);border-radius:8px;font-size:0.9rem;transition:border-color 150ms" id="upload-type-sighted-lbl">
+                        <input type="radio" name="upload-obs-type" id="upload-type-sighted" value="sighted" checked onchange="App.onUploadTypeChange()"> 👁️ Sighted (wild / naturally occurring)
+                    </label>
+                    <label style="display:flex;align-items:center;gap:0.45rem;cursor:pointer;padding:0.5rem 0.85rem;border:1.5px solid var(--border-color);border-radius:8px;font-size:0.9rem;transition:border-color 150ms" id="upload-type-planted-lbl">
+                        <input type="radio" name="upload-obs-type" id="upload-type-planted" value="planted_rswf" onchange="App.onUploadTypeChange()"> 🌱 Planted by RSWF
+                    </label>
+                </div>
+                <div class="form-hint" style="margin-top:0.4rem">Select <b>Sighted</b> if you spotted this plant growing naturally. Select <b>Planted by RSWF</b> if this is a plant that RSWF has planted in the grove.</div>
+            </div>
+
             <div class="form-group">
                 <label for="upload-photo-file">Plant photo (JPG, PNG or WEBP, up to 10 MB)</label>
                 <input type="file" id="upload-photo-file" accept=".jpg,.jpeg,.png,.webp" required class="search-input" style="width:100%" onchange="App.handlePhotoSelectionChanged(event)">
@@ -1076,7 +1097,22 @@
             <h3 id="bulk-upload-title">📂 Bulk Photo Upload</h3>
             <button class="modal-close" aria-label="Close" onclick="App.closeBulkUploadModal()">×</button>
         </div>
-        <p class="modal-intro">Drop up to 50 photos at once. Each file is checked for GPS, zone, and nearby duplicates — review the results below and act on each row.</p>
+        <p class="modal-intro">Drop up to 50 photos at once. Each file is checked for GPS, zone, and nearby duplicates — review the results below and run AI prediction per photo.</p>
+
+        <!-- Observation type selector for bulk -->
+        <div class="form-group" style="margin-bottom:1rem">
+            <label style="font-weight:600;font-size:0.9rem">What kind of records are these? <span class="req">*</span></label>
+            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:0.4rem">
+                <label style="display:flex;align-items:center;gap:0.45rem;cursor:pointer;padding:0.5rem 0.85rem;border:1.5px solid var(--border-color);border-radius:8px;font-size:0.9rem" id="bulk-type-sighted-lbl">
+                    <input type="radio" name="bulk-obs-type" id="bulk-type-sighted" value="sighted" checked onchange="App.onBulkTypeChange()"> 👁️ Sighted (wild / naturally occurring)
+                </label>
+                <label style="display:flex;align-items:center;gap:0.45rem;cursor:pointer;padding:0.5rem 0.85rem;border:1.5px solid var(--border-color);border-radius:8px;font-size:0.9rem" id="bulk-type-planted-lbl">
+                    <input type="radio" name="bulk-obs-type" id="bulk-type-planted" value="planted_rswf" onchange="App.onBulkTypeChange()"> 🌱 Planted by RSWF
+                </label>
+            </div>
+            <div class="form-hint" style="margin-top:0.4rem">This applies to all photos in this batch. Upload separately if the batch mixes sighted and planted records.</div>
+        </div>
+
         <div id="bulk-dropzone" ondragover="event.preventDefault(); this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="App.handleBulkDrop(event)"
              style="border:2px dashed var(--v-stroke-strong, #10b981); border-radius:14px; padding:2.2rem 1rem; text-align:center; cursor:pointer; transition:background 150ms ease"
              onclick="document.getElementById('bulk-file-input').click()">

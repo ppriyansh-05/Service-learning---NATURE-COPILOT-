@@ -907,6 +907,41 @@ class DataService:
         except Exception:
             return False
 
+    @staticmethod
+    def update_ngo_observation(obs_id: int, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Updates an NGO-created observation record in store (iNaturalist records are read-only)."""
+        DataService.protect_inaturalist_record(obs_id)
+        ngo_store_path = os.path.join(get_base_dir(), "data", "processed", "ngo_observations_store.json")
+        if not os.path.exists(ngo_store_path):
+            raise KeyError(f"Observation #{obs_id} not found.")
+
+        with open(ngo_store_path, "r", encoding="utf-8") as f:
+            ngo_records = json.load(f)
+
+        target = None
+        for r in ngo_records:
+            if r.get("id") == obs_id:
+                target = r
+                break
+
+        if not target:
+            raise KeyError(f"Observation #{obs_id} not found.")
+
+        def safe_str(val):
+            if val is None:
+                return None
+            s = str(val).strip()
+            return s if s else None
+
+        for field in ["scientific_name", "common_name", "observed_on", "observer", "notes", "quality_grade"]:
+            if field in update_data and update_data[field] is not None:
+                target[field] = safe_str(update_data[field])
+
+        with open(ngo_store_path, "w", encoding="utf-8") as f:
+            json.dump(ngo_records, f, indent=2)
+
+        return target
+
     # =====================================================================
     # Phase 8 — Dataset Export Generators (CSV, GeoJSON, ZIP)
     # =====================================================================
@@ -1172,6 +1207,7 @@ class DataService:
         content_type: str,
         confirm_location: bool = False,
         allow_nearby_duplicate: bool = False,
+        observation_type: str = "sighted",
     ) -> Dict[str, Any]:
         from app.services.exif_service import validate_upload_file, generate_content_filename, extract_photo_location, compute_photo_fingerprint
         import datetime
@@ -1288,7 +1324,8 @@ class DataService:
             "zone": auto_zone or "",
             "zone_status": zone_status,
             "photo_sha256": sha256_hex,
-            "photo_dhash": dhash_hex
+            "photo_dhash": dhash_hex,
+            "observation_type": observation_type or "sighted",
         }
 
         ngo_records.append(ngo_obs)

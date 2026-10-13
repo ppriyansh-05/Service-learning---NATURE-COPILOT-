@@ -480,7 +480,7 @@ const App = {
                     await this.loadWateringQueue();
                     break;
                 case "verify":
-                    await this.loadVerificationQueue();
+                    await this.loadInatUploadQueue();
                     break;
                 case "compliance":
                     await this.loadCompliance();
@@ -1562,6 +1562,9 @@ const App = {
         document.getElementById("upload-status-indicator").style.display = "none";
         document.getElementById("upload-result-card").style.display = "none";
         document.getElementById("upload-result-preview").style.display = "none";
+        // reset type selector to sighted
+        const sightedRadio = document.getElementById("upload-type-sighted");
+        if (sightedRadio) { sightedRadio.checked = true; this.onUploadTypeChange(); }
         document.getElementById("upload-photo-modal").style.display = "flex";
     },
 
@@ -1581,6 +1584,22 @@ const App = {
         }
     },
 
+    onUploadTypeChange() {
+        const v = document.querySelector('input[name="upload-obs-type"]:checked')?.value || "sighted";
+        const slbl = document.getElementById("upload-type-sighted-lbl");
+        const plbl = document.getElementById("upload-type-planted-lbl");
+        if (slbl) slbl.style.borderColor = v === "sighted" ? "#10b981" : "var(--border-color)";
+        if (plbl) plbl.style.borderColor = v === "planted_rswf" ? "#10b981" : "var(--border-color)";
+    },
+
+    onBulkTypeChange() {
+        const v = document.querySelector('input[name="bulk-obs-type"]:checked')?.value || "sighted";
+        const slbl = document.getElementById("bulk-type-sighted-lbl");
+        const plbl = document.getElementById("bulk-type-planted-lbl");
+        if (slbl) slbl.style.borderColor = v === "sighted" ? "#10b981" : "var(--border-color)";
+        if (plbl) plbl.style.borderColor = v === "planted_rswf" ? "#10b981" : "var(--border-color)";
+    },
+
     async handlePhotoUploadSubmit(e) {
         e.preventDefault();
         const fileInput = document.getElementById("upload-photo-file");
@@ -1590,6 +1609,7 @@ const App = {
         }
 
         const file = fileInput.files[0];
+        const obsType = document.querySelector('input[name="upload-obs-type"]:checked')?.value || "sighted";
         const statusInd = document.getElementById("upload-status-indicator");
         const resultCard = document.getElementById("upload-result-card");
         const resultTitle = document.getElementById("upload-result-title");
@@ -1606,7 +1626,7 @@ const App = {
         submitBtn.disabled = true;
 
         try {
-            const res = await ApiService.uploadPhotoObservation(file);
+            const res = await ApiService.uploadPhotoObservation(file, { obsType });
             statusInd.style.display = "none";
             submitBtn.disabled = false;
 
@@ -1757,6 +1777,11 @@ const App = {
                 <div><b>Longitude:</b> ${res.longitude.toFixed(6)}</div>
                 <div><b>Zone Assignment:</b> <span style="color:#10b981;font-weight:600">${res.zone}</span></div>
                 <div style="margin-top:0.4rem;color:#94a3b8">${res.message}</div>
+                <div style="margin-top:0.75rem">
+                    <button type="button" class="btn-primary btn-green btn-small" onclick="App.addCurrentUploadAsPlantedPlant()">
+                        🌱 Also Add as Planted Plant (Track Watering & Monitoring)
+                    </button>
+                </div>
             `;
 
             if (confirmBox) confirmBox.style.display = "none";
@@ -1814,7 +1839,7 @@ const App = {
             <div style="color:#e2e8f0">${value}</div>`;
 
         const intro = isNearby
-            ? `A plant is already recorded within <b>1 metre</b> of this spot as
+            ? `A plant is already recorded within <b>0.5 metres</b> of this spot as
                 <b style="color:#fbbf24">Observation #${dup.existing_observation_id}</b>.
                 This is probably the same plant from a different angle — the camera's GPS reading
                 naturally wobbles by a metre or two. If so, no new record is needed.`
@@ -1824,11 +1849,18 @@ const App = {
 
         const overrideBtn = isNearby ? `
             <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
-                <button type="button" class="btn-primary btn-small" onclick="App.recordNearbyAnyway()" style="background:#f59e0b;color:#0f172a">
-                    This is a different plant — record anyway
+                <button type="button" class="btn-primary btn-small" onclick="App.recordNearbyAnyway()" style="background:#f59e0b;color:#0f172a;font-weight:600">
+                    ⚠️ This is a different plant — record anyway
                 </button>
-                <span style="color:#94a3b8;font-size:0.8rem">(only when two plants really grow this close)</span>
-            </div>` : "";
+                <button type="button" class="btn-action" onclick="App.openObservationDetail(${Number(dup.existing_observation_id)})">
+                    🔍 View Existing #${dup.existing_observation_id}
+                </button>
+            </div>` : `
+            <div style="margin-top:0.75rem">
+                <button type="button" class="btn-action" onclick="App.openObservationDetail(${Number(dup.existing_observation_id)})">
+                    🔍 View Existing #${dup.existing_observation_id}
+                </button>
+            </div>`;
 
         resultDetails.innerHTML = `
             <div style="color:#e2e8f0;margin-bottom:0.75rem;line-height:1.5">${intro}</div>
@@ -1928,26 +1960,6 @@ const App = {
             }
 
             let html = "";
-
-            // --- NGO Best-Match Banner ---
-            if (res.best_ngo_prediction) {
-                const b = res.best_ngo_prediction;
-                html += `
-                    <div style="margin-bottom:1rem;padding:0.75rem 1rem;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:8px;display:flex;align-items:center;gap:0.6rem">
-                        <span style="font-size:1.25rem">🌿</span>
-                        <div>
-                            <div style="font-weight:700;color:#34d399;font-size:0.9rem">Best NGO-List Match: <em>${b.scientific_name}</em>${b.marathi_name ? ` — ${b.marathi_name}` : ''}</div>
-                            <div style="color:#6ee7b7;font-size:0.78rem">${b.ngo_note || ''} &nbsp;·&nbsp; Confidence: ${b.confidence_percentage}</div>
-                        </div>
-                    </div>`;
-            } else {
-                html += `
-                    <div style="margin-bottom:1rem;padding:0.65rem 1rem;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);border-radius:8px;display:flex;align-items:center;gap:0.6rem">
-                        <span style="font-size:1.1rem">⚠️</span>
-                        <div style="color:#fcd34d;font-size:0.82rem"><b>None of the top predictions match the NGO species list.</b><br>The plant may not have been identified correctly, or it is not a species purchased for this site.</div>
-                    </div>`;
-            }
-
             res.predictions.forEach(p => {
                 let badgeColor = "#ef4444"; // LOW
                 let badgeBg = "rgba(239, 68, 68, 0.2)";
@@ -1959,19 +1971,13 @@ const App = {
                     badgeBg = "rgba(245, 158, 11, 0.2)";
                 }
 
-                // NGO filter badge
-                const ngoBadge = p.in_ngo_list
-                    ? `<span title="${this.esc(p.ngo_note || '')}" style="display:inline-flex;align-items:center;gap:0.25rem;background:rgba(16,185,129,0.18);color:#34d399;border:1px solid rgba(16,185,129,0.45);border-radius:20px;padding:0.15rem 0.55rem;font-size:0.7rem;font-weight:700;margin-left:0.4rem">✅ NGO List${p.marathi_name ? ' · ' + this.esc(p.marathi_name) : ''}</span>`
-                    : `<span title="This species was not purchased or planned for Bavdhan Van Udyan. Treat prediction with caution." style="display:inline-flex;align-items:center;gap:0.25rem;background:rgba(245,158,11,0.15);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);border-radius:20px;padding:0.15rem 0.55rem;font-size:0.7rem;font-weight:700;margin-left:0.4rem">⚠️ Not in NGO List</span>`;
-
                 html += `
-                    <div style="margin-bottom:0.75rem;padding:0.75rem;background:rgba(255,255,255,0.03);border:1px solid ${p.in_ngo_list ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.08)'};border-radius:6px${p.in_ngo_list ? ';box-shadow:0 0 0 1px rgba(16,185,129,0.1) inset' : ''}">
-                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.3rem">
-                            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:0.15rem">
+                    <div style="margin-bottom:0.75rem;padding:0.75rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <div>
                                 <span style="font-weight:700;color:#c084fc">#${p.rank}</span>
                                 <span style="font-weight:600;color:#fff;margin-left:0.4rem">${p.scientific_name}</span>
                                 ${p.common_name ? `<span style="color:#94a3b8;font-size:0.8rem"> (${p.common_name})</span>` : ''}
-                                ${ngoBadge}
                             </div>
                             <span class="status-badge" style="background:${badgeBg};color:${badgeColor};font-size:0.75rem">${p.confidence_level} (${p.confidence_percentage})</span>
                         </div>
@@ -1979,9 +1985,6 @@ const App = {
                         <div style="margin-top:0.4rem;background:rgba(255,255,255,0.1);height:6px;border-radius:3px;overflow:hidden">
                             <div style="width:${p.confidence_percentage};background:${badgeColor};height:100%"></div>
                         </div>
-
-                        ${p.in_ngo_list && p.ngo_note ? `<div style="margin-top:0.35rem;font-size:0.75rem;color:#6ee7b7;opacity:0.85">${this.esc(p.ngo_note)}</div>` : ''}
-                        ${!p.in_ngo_list ? `<div style="margin-top:0.35rem;font-size:0.75rem;color:#fcd34d;opacity:0.85">⚠️ Not in NGO list — this species was not purchased for Bavdhan Van Udyan. Confirm only if you're certain.</div>` : ''}
 
                         <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:0.6rem">
                             <button type="button" class="btn-action" style="font-size:0.75rem;padding:0.25rem 0.5rem;background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.4)" 
@@ -2020,7 +2023,6 @@ const App = {
             `;
 
             aiList.innerHTML = html;
-
 
         } catch (err) {
             btnTrigger.disabled = false;
@@ -2187,6 +2189,8 @@ const App = {
                 <button type="button" class="btn-primary btn-blue btn-small" onclick="App.toggleReviewCorrection()">✏️ Enter correct species</button>
                 <button type="button" class="btn-action" onclick="App.reviewNeedsExpert(${id})">❓ Needs expert review</button>
                 <button type="button" class="btn-action" id="btn-detail-rerun-ai" onclick="App.rerunDetailAI(${id})">🤖 ${suggestions.length ? "Re-run" : "Run"} Pl@ntNet AI</button>
+                <button type="button" class="btn-primary btn-green btn-small" onclick="App.addObservationAsPlantedPlant(${id})" title="Track this plant for watering and health monitoring">🌱 Add as Planted Plant</button>
+                <button type="button" class="btn-action delete" onclick="App.confirmDeleteObservation(${id})">🗑️ Delete</button>
             </div>
             <div id="review-correction-form" class="review-form" style="display:none">
                 <div class="form-grid-2">
@@ -2214,6 +2218,76 @@ const App = {
                     ${reviewHtml}
                 </div>
             </div>`;
+    },
+
+
+    // Convert observation into a planted plant record so it gets tracked for watering & monitoring
+    addObservationAsPlantedPlant(obsId) {
+        const o = this.currentDetailObs;
+        if (!o) return;
+        this.closeObservationDetail();
+        this.openAddPlantModal();
+        setTimeout(() => {
+            const sci = document.getElementById("form-scientific-name");
+            const com = document.getElementById("form-common-name");
+            const lat = document.getElementById("form-latitude");
+            const lng = document.getElementById("form-longitude");
+            const zone = document.getElementById("form-zone-code");
+            const photoUrl = document.getElementById("form-photo-url");
+            const notes = document.getElementById("form-notes");
+
+            if (sci && o.scientific_name) sci.value = o.scientific_name;
+            if (com && o.common_name) com.value = o.common_name;
+            if (lat && o.latitude) lat.value = o.latitude;
+            if (lng && o.longitude) lng.value = o.longitude;
+            if (zone && o.zone && o.zone !== "Outside Active Zones") zone.value = o.zone;
+            if (photoUrl && o.photo_url) photoUrl.value = o.photo_url;
+            if (notes) notes.value = `Recorded from Field Observation #${o.id}.`;
+        }, 100);
+    },
+
+    // Convert freshly verified geotag upload into a planted plant record
+    addCurrentUploadAsPlantedPlant() {
+        const obsId = this.currentUploadedObsId;
+        this.closeUploadPhotoModal();
+        this.openAddPlantModal();
+        if (obsId) {
+            ApiService.getObservationById(obsId).then(o => {
+                const sci = document.getElementById("form-scientific-name");
+                const com = document.getElementById("form-common-name");
+                const lat = document.getElementById("form-latitude");
+                const lng = document.getElementById("form-longitude");
+                const zone = document.getElementById("form-zone-code");
+                const photoUrl = document.getElementById("form-photo-url");
+                const notes = document.getElementById("form-notes");
+
+                if (sci && o.scientific_name) sci.value = o.scientific_name;
+                if (com && o.common_name) com.value = o.common_name;
+                if (lat && o.latitude) lat.value = o.latitude;
+                if (lng && o.longitude) lng.value = o.longitude;
+                if (zone && o.zone && o.zone !== "Outside Active Zones") zone.value = o.zone;
+                if (photoUrl && o.photo_url) photoUrl.value = o.photo_url;
+                if (notes) notes.value = `Recorded from Geotagged Photo (Observation #${o.id}).`;
+            }).catch(() => {});
+        }
+    },
+
+    confirmDeleteObservation(obsId) {
+        this.requireAuth(() => this._doConfirmDeleteObservation(obsId));
+    },
+
+    async _doConfirmDeleteObservation(obsId) {
+        if (!confirm(`Are you sure you want to delete Observation #${obsId}? This action cannot be undone.`)) return;
+        try {
+            await ApiService.deleteObservation(obsId);
+            this.notify(`✓ Observation #${obsId} deleted.`);
+            this.closeObservationDetail();
+            await this.loadObservations();
+            await this.loadOverview();
+            if (this.map) await this.loadMapData();
+        } catch (err) {
+            this.notify(`Could not delete observation: ${err.message}`, "error");
+        }
     },
 
     toggleReviewCorrection() {
@@ -2629,103 +2703,134 @@ Status: ${c.status}`;
         });
     },
 
-    // --- Verification queue with keyboard shortcuts ---
-    async loadVerificationQueue() {
-        this._verifyQueue = null;
-        this._verifyIndex = 0;
+    // --- iNaturalist Upload Queue (replaces old Verification Queue) ---
+    async loadInatUploadQueue() {
+        const empty = document.getElementById("inat-queue-empty");
+        const list = document.getElementById("inat-queue-list");
+        const selectBar = document.getElementById("inat-select-bar");
+        const uploadBtn = document.getElementById("btn-upload-to-inat");
+        if (!empty || !list) return;
+        empty.style.display = "block";
+        empty.innerHTML = `<div class="muted">Loading…</div>`;
+        list.innerHTML = "";
+        if (selectBar) selectBar.style.display = "none";
+        if (uploadBtn) uploadBtn.style.display = "none";
         try {
-            const items = await ApiService.getVerificationQueue(50);
-            this._verifyQueue = items || [];
-            this._renderVerifyCard();
-            if (!this._verifyKeysBound) this._bindVerifyKeys();
+            // fetch only NGO-uploaded observations (source != iNaturalist)
+            const all = await ApiService.getObservations({ source: "NGO / New Upload", limit: 200 });
+            const items = (all.observations || all || []).filter(o => o.source !== "iNaturalist");
+            this._inatQueue = items;
+            if (!items.length) {
+                empty.innerHTML = `<div style="font-size:2.5rem;margin-bottom:0.5rem">🌿</div><div>No RSWF-uploaded observations yet. Upload photos from the <b>Manage Plantations</b> tab and they will appear here.</div>`;
+                return;
+            }
+            empty.style.display = "none";
+            if (selectBar) selectBar.style.display = "flex";
+            if (uploadBtn) uploadBtn.style.display = "inline-block";
+            list.innerHTML = `
+                <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr>
+                        <th style="width:2rem"></th>
+                        <th>Photo</th>
+                        <th>Species</th>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Zone</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr></thead>
+                    <tbody id="inat-queue-tbody">${items.map((o, i) => this._inatQueueRow(o, i)).join("")}</tbody>
+                </table>
+                </div>`;
+            this._updateInatSelectedCount();
         } catch (e) {
-            document.getElementById("verify-empty").textContent = `Could not load queue: ${e.message}`;
-        }
-    },
-
-    _bindVerifyKeys() {
-        this._verifyKeysBound = true;
-        document.addEventListener("keydown", (e) => {
-            if (this.currentTab !== "verify") return;
-            if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
-            const q = this._verifyQueue;
-            if (!q || !q.length) return;
-            if (e.key === "c" || e.key === "C") { e.preventDefault(); this._verifyAct("confirm"); }
-            else if (e.key === "x" || e.key === "X") { e.preventDefault(); this._verifyAct("correct"); }
-            else if (e.key === "r" || e.key === "R") { e.preventDefault(); this._verifyAct("needs_review"); }
-            else if (e.key === "ArrowRight") { e.preventDefault(); this._verifyNext(); }
-            else if (e.key === "ArrowLeft") { e.preventDefault(); this._verifyPrev(); }
-        });
-    },
-
-    _renderVerifyCard() {
-        const stage = document.getElementById("verify-card");
-        const empty = document.getElementById("verify-empty");
-        const q = this._verifyQueue || [];
-        if (!q.length) {
             empty.style.display = "block";
-            stage.style.display = "none";
-            empty.innerHTML = `<div style="font-size:3rem">✅</div><div style="margin-top:0.5rem">Queue is empty. Nothing to review right now.</div>`;
-            return;
+            empty.innerHTML = `<div class="muted">Could not load observations: ${e.message}</div>`;
         }
-        const cur = q[this._verifyIndex];
-        if (!cur) return;
-        empty.style.display = "none";
-        stage.style.display = "block";
-        const photo = cur.photo_url ? `<img src="${cur.photo_url}" alt="observation" onerror="this.outerHTML='<div class=&quot;popup-photo-empty&quot;>📷 photo missing</div>'" style="width:100%;max-height:360px;object-fit:cover;border-radius:12px;border:1px solid var(--v-stroke)">` : `<div class="popup-photo-empty">📷 no photo</div>`;
-        stage.innerHTML = `
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;align-items:start">
-                <div>${photo}</div>
-                <div>
-                    <div class="muted" style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase">Observation #${cur.id} · ${this._verifyIndex + 1} of ${q.length}</div>
-                    <h3 style="font-size:1.3rem;margin-top:0.3rem">${cur.scientific_name || "<em>Not identified</em>"}</h3>
-                    <div class="muted" style="margin-bottom:0.6rem">${cur.common_name || "—"}</div>
-                    <div style="font-size:0.85rem;line-height:1.6">
-                        <div><b>Date:</b> ${cur.observed_on || "—"}</div>
-                        <div><b>Zone:</b> ${cur.zone || cur.zone_code || "—"}</div>
-                        <div><b>Observer:</b> ${cur.observer || "—"}</div>
-                        <div><b>GPS:</b> ${cur.latitude || "—"}, ${cur.longitude || "—"}</div>
-                        ${cur.notes ? `<div style="margin-top:0.4rem" class="muted">${cur.notes}</div>` : ""}
-                    </div>
-                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem">
-                        <button class="btn-primary" onclick="App._verifyAct('confirm')">✅ Confirm (C)</button>
-                        <button class="btn-primary btn-blue" onclick="App._verifyAct('correct')">✎ Correct (X)</button>
-                        <button class="btn-primary btn-amber" onclick="App._verifyAct('needs_review')">⚑ Needs review (R)</button>
-                    </div>
-                    <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
-                        <button class="btn-action" onclick="App._verifyPrev()">← Prev</button>
-                        <button class="btn-action" onclick="App._verifyNext()">Skip →</button>
-                    </div>
-                </div>
-            </div>
-        `;
     },
 
-    _verifyNext() { if (this._verifyIndex < (this._verifyQueue?.length || 0) - 1) { this._verifyIndex++; this._renderVerifyCard(); } },
-    _verifyPrev() { if (this._verifyIndex > 0) { this._verifyIndex--; this._renderVerifyCard(); } },
+    _inatQueueRow(o, i) {
+        const photo = o.photo_url
+            ? `<img src="${window.APP_CONFIG.getEndpoint(o.photo_url)}" alt="obs" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--v-stroke)" onerror="this.outerHTML='<span class=&quot;muted&quot;>no photo</span>'">`
+            : `<span class="muted">📷</span>`;
+        const typeLabel = o.observation_type === "planted_rswf"
+            ? `<span class="pill pill-green">🌱 Planted</span>`
+            : `<span class="pill pill-orange">👁️ Sighted</span>`;
+        const status = o.verification_status || "pending";
+        const statusBadge = status === "confirm" || status === "confirmed"
+            ? `<span class="pill pill-green">✅ Confirmed</span>`
+            : status === "needs_review"
+            ? `<span class="pill pill-orange">⚠️ Needs review</span>`
+            : `<span class="pill pill-grey">${status}</span>`;
+        return `<tr id="inat-row-${i}">
+            <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" onchange="App._updateInatSelectedCount()"></td>
+            <td>${photo}</td>
+            <td style="font-size:0.82rem">${this.esc(o.scientific_name || '—')}<br><span class="muted">${this.esc(o.common_name || '')}</span></td>
+            <td>${typeLabel}</td>
+            <td style="font-size:0.82rem">${o.observed_on || '—'}</td>
+            <td style="font-size:0.82rem">${o.zone || '—'}</td>
+            <td>${statusBadge}</td>
+            <td>
+                <button class="btn-action" style="font-size:0.78rem" onclick="App.openObservationDetail(${o.id})">View</button>
+                ${o.verification_status !== 'confirmed' ? `<button class="btn-primary" style="font-size:0.78rem;padding:0.25rem 0.6rem" onclick="App._inatQuickConfirm(${i})">Confirm</button>` : ''}
+            </td>
+        </tr>`;
+    },
 
-    async _verifyAct(decision) {
-        const cur = (this._verifyQueue || [])[this._verifyIndex];
-        if (!cur) return;
+    _updateInatSelectedCount() {
+        const cbs = document.querySelectorAll(".inat-select-cb:checked");
+        const el = document.getElementById("inat-selected-count");
+        if (el) el.textContent = `${cbs.length} selected`;
+        const allCb = document.getElementById("inat-select-all");
+        const totalCbs = document.querySelectorAll(".inat-select-cb");
+        if (allCb) allCb.indeterminate = cbs.length > 0 && cbs.length < totalCbs.length;
+        if (allCb && cbs.length === totalCbs.length && totalCbs.length > 0) allCb.checked = true;
+    },
+
+    inatToggleSelectAll(checked) {
+        document.querySelectorAll(".inat-select-cb").forEach(cb => cb.checked = checked);
+        this._updateInatSelectedCount();
+    },
+
+    async _inatQuickConfirm(idx) {
+        const o = (this._inatQueue || [])[idx];
+        if (!o) return;
         if (!ApiService.getNgoPassword()) { this.openAuthModal(); return; }
-        let payload = { decision };
-        if (decision === "correct") {
-            const sci = prompt("Corrected scientific name:", cur.scientific_name || "");
-            if (!sci) return;
-            const com = prompt("Corrected common name (optional):", cur.common_name || "") || "";
-            payload.scientific_name = sci;
-            payload.common_name = com;
-        }
         try {
-            await ApiService.verifyObservation(cur.id, payload);
-            this.notify(`Observation #${cur.id} ${decision === "confirm" ? "confirmed" : decision === "correct" ? "corrected" : "flagged for review"}.`);
-            this._verifyQueue.splice(this._verifyIndex, 1);
-            if (this._verifyIndex >= this._verifyQueue.length) this._verifyIndex = Math.max(0, this._verifyQueue.length - 1);
-            this._renderVerifyCard();
-        } catch (e) {
-            this.notify(`Verification failed: ${e.message}`, "error", 7000);
-        }
+            await ApiService.verifyObservation(o.id, { decision: "confirm" });
+            this.notify(`Observation #${o.id} confirmed ✔`, "success");
+            await this.loadInatUploadQueue();
+        } catch (e) { this.notify(`Failed: ${e.message}`, "error"); }
     },
+
+    async uploadSelectedToInat() {
+        const checked = document.querySelectorAll(".inat-select-cb:checked");
+        if (!checked.length) { this.notify("Select at least one observation first.", "warning"); return; }
+        const ids = Array.from(checked).map(cb => cb.dataset.id);
+        const items = (this._inatQueue || []).filter(o => ids.includes(String(o.id)));
+
+        // Build iNaturalist create-observation URLs for each item
+        const links = items.map(o => {
+            const params = new URLSearchParams({
+                taxon_name: o.scientific_name || "",
+                observed_on_string: o.observed_on || "",
+                description: o.notes || `Observed at Van Udyan, Bavdhan, Pune by RSWF. Zone: ${o.zone || 'unknown'}.`,
+                place_guess: "Bavdhan Van Udyan, Pune, Maharashtra, India",
+                latitude: o.latitude || "",
+                longitude: o.longitude || "",
+                "observation[tag_list]": "Van Udyan, RSWF, Bavdhan, Pune",
+            });
+            return { id: o.id, url: `https://www.inaturalist.org/observations/new?${params.toString()}`, name: o.scientific_name || `#${o.id}` };
+        });
+
+        // Open iNaturalist tabs and show user a summary
+        links.forEach(l => window.open(l.url, "_blank"));
+        this.notify(`🌿 Opened ${links.length} iNaturalist upload page${links.length > 1 ? 's' : ''} in new tabs. Fill in any remaining details and submit on iNaturalist.`, "success", 8000);
+    },
+
+    // Keep old verification queue functions for backward compat (no longer shown in nav)
+    async loadVerificationQueue() { await this.loadInatUploadQueue(); },
 
     // --- Per-species profile modal ---
     async openSpeciesProfile(scientificName) {
@@ -2777,7 +2882,14 @@ Status: ${c.status}`;
     closeSpeciesProfile() { document.getElementById("species-profile-modal").style.display = "none"; },
 
     // --- Bulk upload ---
-    openBulkUploadModal() { this.requireAuth(() => { document.getElementById("bulk-upload-modal").style.display = "flex"; document.getElementById("bulk-results").innerHTML = ""; document.getElementById("bulk-progress").style.display = "none"; }); },
+    openBulkUploadModal() {
+        document.getElementById("bulk-upload-modal").style.display = "flex";
+        document.getElementById("bulk-results").innerHTML = "";
+        document.getElementById("bulk-progress").style.display = "none";
+        // reset type selector
+        const sightedRadio = document.getElementById("bulk-type-sighted");
+        if (sightedRadio) { sightedRadio.checked = true; this.onBulkTypeChange(); }
+    },
     closeBulkUploadModal() { document.getElementById("bulk-upload-modal").style.display = "none"; },
 
     async handleBulkDrop(e) {
@@ -2788,15 +2900,17 @@ Status: ${c.status}`;
         const imgs = files.filter(f => /\.(jpe?g|png|webp)$/i.test(f.name));
         if (!imgs.length) { this.notify("No JPG/PNG/WEBP files found.", "error"); return; }
         if (imgs.length > 50) { this.notify("At most 50 files per batch.", "error"); return; }
+        const obsType = document.querySelector('input[name="bulk-obs-type"]:checked')?.value || "sighted";
         const prog = document.getElementById("bulk-progress");
         prog.style.display = "block";
         prog.textContent = `Uploading ${imgs.length} files…`;
         try {
-            const res = await ApiService.bulkUploadPhotos(imgs);
+            const res = await ApiService.bulkUploadPhotos(imgs, { obsType });
             prog.textContent = `Done: ${res.summary.ok} ok · ${res.summary.needs_confirmation} need confirmation · ${res.summary.duplicates} duplicates · ${res.summary.rejected} rejected · ${res.summary.errors} errors.`;
             const rows = (res.results || []).map(r => {
                 const badge = r.ok ? (r.requires_confirmation ? '<span class="pill pill-orange">needs GPS confirmation</span>' : '<span class="pill pill-green">saved</span>') :
                     r.status === "duplicate" ? '<span class="pill pill-purple">duplicate</span>' :
+                    r.status === "no_gps" ? '<span class="pill pill-grey">no GPS</span>' :
                     '<span class="pill pill-grey">' + (r.status || "error") + '</span>';
                 const msg = r.error || r.message || (r.observation_id ? `#${r.observation_id} · ${r.zone || ""}` : "");
                 return `<tr><td>${r.filename}</td><td>${badge}</td><td class="muted">${msg}</td></tr>`;
@@ -2811,7 +2925,26 @@ Status: ${c.status}`;
                 </div>
             `;
         } catch (err) {
-            prog.textContent = `Bulk upload failed: ${err.message}`;
+            // Provide a useful diagnostic. "Failed to fetch" means the browser
+            // couldn't reach the server at all — most likely a CORS pre-flight
+            // failure, network issue, or the server returned a 413 before CORS
+            // headers were attached (request body exceeded hosting limit).
+            let msg = err.message || String(err);
+            if (msg.toLowerCase().includes("failed to fetch")) {
+                msg = (
+                    "Could not reach the server. Possible causes: " +
+                    "(1) Too many or too large photos — try fewer than 10 files at once; " +
+                    "(2) Network / CORS error — check the browser Console (F12) for details; " +
+                    "(3) Server is still starting — wait 30 seconds and retry."
+                );
+            } else if (msg.includes("413") || msg.toLowerCase().includes("too large")) {
+                msg = (
+                    "The batch is too large for the hosting provider. " +
+                    "Try uploading fewer photos per batch (e.g. 5–10 at a time)."
+                );
+            }
+            prog.textContent = `Bulk upload failed: ${msg}`;
+            prog.style.color = "#f87171";
         }
     },
 

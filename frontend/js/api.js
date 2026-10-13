@@ -186,9 +186,10 @@ class ApiService {
     // Photo Upload & Location Detection (EXIF & Image Geotag)
     // allowNearbyDuplicate=true overrides the 1-metre same-plant guard (second attempt after the
     // user confirms "no, this really is a different plant").
-    static async uploadPhotoObservation(file, { confirmLocation = false, allowNearbyDuplicate = false } = {}) {
+    static async uploadPhotoObservation(file, { confirmLocation = false, allowNearbyDuplicate = false, obsType = "sighted" } = {}) {
         const formData = new FormData();
         formData.append("file", file);
+        if (obsType) formData.append("observation_type", obsType);
 
         const params = new URLSearchParams();
         if (confirmLocation) params.set("confirm_location", "true");
@@ -354,6 +355,14 @@ class ApiService {
         });
     }
 
+    static updateObservation(obsId, data) {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint(`/observations/${obsId}`), {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+    }
+
     static deleteObservation(obsId) {
         return this.fetchJson(window.APP_CONFIG.getEndpoint(`/observations/${obsId}`), {
             method: "DELETE"
@@ -427,9 +436,10 @@ class ApiService {
         });
     }
 
-    static async bulkUploadPhotos(files, { allowNearbyDuplicate = false } = {}) {
+    static async bulkUploadPhotos(files, { allowNearbyDuplicate = false, obsType = "sighted" } = {}) {
         const fd = new FormData();
         for (const f of files) fd.append('files', f);
+        if (obsType) fd.append('observation_type', obsType);
         const url = window.APP_CONFIG.getEndpoint(`/observations/bulk-upload?allow_nearby_duplicate=${allowNearbyDuplicate}`);
         const res = await fetch(url, { method: 'POST', body: fd });
         if (!res.ok) {
