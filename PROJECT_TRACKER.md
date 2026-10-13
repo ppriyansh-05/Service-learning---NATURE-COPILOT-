@@ -880,3 +880,8 @@ Key Changes:
 - Preserves completed batches if a later batch fails, reports failed file names/statuses, and avoids silently replaying successful batches. Per-photo limit remains 15 MiB; files above it are rejected with a message.
 - Prediction and per-row Edit actions continue to run against returned observation IDs.
 - JavaScript syntax check passed. Real large-batch upload, hosting request-size limits, and deployed behavior have not been verified. Extremely large selections are not literally unlimited; browser memory, server/proxy limits, timeouts, storage, and API quotas still apply.
+
+### Top-left brand label — 2026-10-14
+- Changed only the top-left header brand text in `frontend/index.html` from “Van Udyan / Biodiversity Platform · RSWF” to “Nature Copilot”.
+- Left the rest of the page headings and project-specific Van Udyan/RSWF terminology unchanged, as requested.
+- Source change committed to feature branch; deployment not verified.
