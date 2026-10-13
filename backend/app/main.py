@@ -155,9 +155,14 @@ class RequestBodySizeLimitMiddleware(BaseHTTPMiddleware):
             try:
                 if int(length) > self.max_bytes:
                     return Response(
-                        content="Request body too large.",
+                        content="Request body too large. Try uploading fewer photos per batch.",
                         status_code=413,
-                        headers={"Content-Type": "text/plain"},
+                        headers={
+                            "Content-Type": "text/plain",
+                            "Access-Control-Allow-Origin": "*",
+                            "Access-Control-Allow-Methods": "*",
+                            "Access-Control-Allow-Headers": "*",
+                        },
                     )
             except ValueError:
                 return Response(content="Bad Request.", status_code=400)

@@ -58,50 +58,7 @@ def load_clean_csv_records() -> List[Dict[str, Any]]:
 
     return records
 
-DEFAULT_PLANTED_PLANTS = [
-    {
-        "id": 1,
-        "plant_code": "PL-001",
-        "source": "Planted Plants",
-        "scientific_name": "Ficus religiosa",
-        "common_name": "Peepal Tree",
-        "planted_on": "2026-01-15",
-        "status": "Alive",
-        "latitude": 18.5195,
-        "longitude": 73.7802,
-        "zone_code": "ZONE A",
-        "notes": "Healthy baseline plantation specimen",
-        "photo_url": None
-    },
-    {
-        "id": 2,
-        "plant_code": "PL-002",
-        "source": "Planted Plants",
-        "scientific_name": "Azadirachta indica",
-        "common_name": "Neem Tree",
-        "planted_on": "2026-02-10",
-        "status": "Alive",
-        "latitude": 18.5200,
-        "longitude": 73.7808,
-        "zone_code": "ZONE B",
-        "notes": "Healthy baseline plantation specimen",
-        "photo_url": None
-    },
-    {
-        "id": 3,
-        "plant_code": "PL-003",
-        "source": "Planted Plants",
-        "scientific_name": "Santalum album",
-        "common_name": "Sandalwood",
-        "planted_on": "2026-03-01",
-        "status": "Alive",
-        "latitude": 18.5190,
-        "longitude": 73.7815,
-        "zone_code": "ZONE C",
-        "notes": "Healthy baseline plantation specimen",
-        "photo_url": None
-    }
-]
+DEFAULT_PLANTED_PLANTS = []
 
 def load_planted_plants_store() -> List[Dict[str, Any]]:
     """

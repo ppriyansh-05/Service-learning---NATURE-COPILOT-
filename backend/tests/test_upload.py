@@ -22,18 +22,25 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True, scope="module")
 def cleanup_after_upload_tests():
-    yield
     import json, glob
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     store_path = os.path.join(base_dir, "data", "processed", "ngo_observations_store.json")
+    # Preserve pre-test records so tests never wipe genuine field data
+    initial_records = []
+    if os.path.exists(store_path):
+        try:
+            with open(store_path, "r", encoding="utf-8") as f:
+                initial_records = json.load(f)
+        except Exception:
+            initial_records = []
+    yield
     uploads_dir = os.path.join(base_dir, "data", "uploads")
-
     if os.path.exists(store_path):
         with open(store_path, "w", encoding="utf-8") as f:
-            json.dump([], f, indent=2)
+            json.dump(initial_records, f, indent=2)
 
     if os.path.exists(uploads_dir):
-        for file_path in glob.glob(os.path.join(uploads_dir, "upload_*")):
+        for file_path in glob.glob(os.path.join(uploads_dir, "upload_*test*")):
             try:
                 os.remove(file_path)
             except Exception:
@@ -76,7 +83,10 @@ def create_test_jpeg_with_gps(lat: float, lng: float, filename="test_exif.jpg", 
 def create_test_geotag_jpeg(text: str = "Lat 18.518511 Long 73.780200") -> bytes:
     """Helper creating a WhatsApp-style JPEG (no EXIF) with a visible GPS geotag overlay and a unique background."""
     from PIL import ImageDraw, ImageFont
-    font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 32)
+        try:
+        font = ImageFont.truetype("arial.ttf", 32)
+    except Exception:
+        font = ImageFont.load_default()
     img = Image.new("RGB", (800, 200), color=(255, 255, 255))
     d = ImageDraw.Draw(img)
     noise = os.urandom(40)
@@ -377,7 +387,10 @@ def create_gpsmap_camera_style_jpeg(overlay_text: str, size=(2448, 3264)) -> byt
     img = Image.frombytes("RGB", (size[0] // 8, size[1] // 8), os.urandom((size[0] // 8) * (size[1] // 8) * 3)).resize(size)
     d = ImageDraw.Draw(img)
     d.rectangle([380, size[1] - 330, size[0] - 60, size[1] - 40], fill=(60, 50, 45))
-    font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 44)
+        try:
+        font = ImageFont.truetype("arial.ttf", 44)
+    except Exception:
+        font = ImageFont.load_default()
     d.text((410, size[1] - 300), "Pune, Maharashtra, India", font=font, fill=(255, 255, 255))
     d.text((410, size[1] - 200), overlay_text, font=font, fill=(255, 255, 255))
     exif = img.getexif()

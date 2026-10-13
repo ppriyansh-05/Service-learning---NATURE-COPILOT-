@@ -18,15 +18,30 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True, scope="module")
 def cleanup_after_crud_tests():
-    yield
     import json
-    from app.services.data_service import save_planted_plants_store, DEFAULT_PLANTED_PLANTS
-    save_planted_plants_store(DEFAULT_PLANTED_PLANTS)
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    store_path = os.path.join(base_dir, "data", "processed", "ngo_observations_store.json")
-    if os.path.exists(store_path):
-        with open(store_path, "w", encoding="utf-8") as f:
-            json.dump([], f, indent=2)
+    planted_path = os.path.join(base_dir, "data", "processed", "planted_plants_store.json")
+    ngo_path = os.path.join(base_dir, "data", "processed", "ngo_observations_store.json")
+    
+    # Snapshot existing records before test
+    init_planted = []
+    init_ngo = []
+    if os.path.exists(planted_path):
+        try:
+            with open(planted_path, "r", encoding="utf-8") as f: init_planted = json.load(f)
+        except Exception: pass
+    if os.path.exists(ngo_path):
+        try:
+            with open(ngo_path, "r", encoding="utf-8") as f: init_ngo = json.load(f)
+        except Exception: pass
+
+    yield
+
+    from app.services.data_service import save_planted_plants_store
+    save_planted_plants_store(init_planted)
+    if os.path.exists(ngo_path):
+        with open(ngo_path, "w", encoding="utf-8") as f:
+            json.dump(init_ngo, f, indent=2)
 
 def test_create_planted_plant_success():
     unique_code = f"PL-TEST-{uuid.uuid4().hex[:6].upper()}"

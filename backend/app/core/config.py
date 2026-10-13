@@ -97,9 +97,10 @@ class Settings:
     @property
     def MAX_REQUEST_BODY_BYTES(self) -> int:
         try:
-            return max(1024, int(_str_env("MAX_REQUEST_BODY_BYTES", str(16 * 1024 * 1024))))
+            # Default raised to 500 MB so batches of up to 50 high-res photos are accepted without denial
+            return max(1024, int(_str_env("MAX_REQUEST_BODY_BYTES", str(500 * 1024 * 1024))))
         except ValueError:
-            return 16 * 1024 * 1024
+            return 500 * 1024 * 1024
 
     @property
     def DATABASE_URL(self) -> str:
