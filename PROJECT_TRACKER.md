@@ -868,3 +868,8 @@ Key Changes:
 - This change uses the existing backend identification and observation-detail APIs; it does not introduce synthetic production records or automatically mark AI predictions as verified.
 - Validation status: source update committed through GitHub. Browser/manual upload testing, live Pl@ntNet API testing, backend restart/persistence testing, and deployment verification have **not** been performed in this change. Bulk uploads with pending GPS confirmation require the existing location-confirmation flow before a prediction can be generated.
 - Next: test a small real batch (one saved observation, one pending visible-geotag confirmation, and one prediction failure if naturally encountered); verify prediction-to-photo association, correction save, and backend persistence without creating fake production data.
+
+### Bulk upload inline action visibility — 2026-10-14
+- Made the bulk upload result action explicit as a dedicated **Action** column with a visible **Edit** button for successfully saved observations.
+- The button opens the existing observation detail/review screen for correction and verification. Rows awaiting GPS confirmation show “Confirm location first”; rows without a saved observation ID do not offer editing.
+- JavaScript syntax check passed after the source change. Browser verification and deployment verification have not been performed.
