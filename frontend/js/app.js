@@ -2800,7 +2800,7 @@ Status: ${c.status}`;
                         <th>Type</th>
                         <th>Date</th>
                         <th>Zone</th>
-                        <th>Status</th>
+                        <th>Verification / iNaturalist</th>
                         <th>Actions</th>
                     </tr></thead>
                     <tbody id="inat-queue-tbody">${items.map((o, i) => this._inatQueueRow(o, i)).join("")}</tbody>
@@ -2821,13 +2821,21 @@ Status: ${c.status}`;
             ? `<span class="pill pill-green">🌱 Planted</span>`
             : `<span class="pill pill-orange">👁️ Sighted</span>`;
         const status = String(o.identification_status || o.verification_status || "pending").toLowerCase();
-        const statusBadge = ["verified", "corrected", "confirmed"].includes(status)
-            ? `<span class="pill pill-green">${status === "corrected" ? "Corrected & verified" : "Verified"}</span>`
-            : status === "needs_review"
-            ? `<span class="pill pill-orange">⚠️ Needs review</span>`
-            : `<span class="pill pill-grey">Pending verification</span>`;
+        const verified = ["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase());
+        const uploaded = Boolean(o.observation_url);
+        const statusBadge = uploaded
+            ? `<span class="pill pill-green">✓ Uploaded to iNaturalist</span>`
+            : ["verified", "corrected", "confirmed"].includes(status)
+                ? `<span class="pill pill-green">${status === "corrected" ? "Corrected & verified" : "Verified"}</span>`
+                : status === "needs_review"
+                    ? `<span class="pill pill-orange">⚠️ Needs review</span>`
+                    : `<span class="pill pill-grey">Pending verification</span>`;
+        const selectDisabled = !verified || uploaded;
+        const selectTitle = uploaded
+            ? "Already linked to an iNaturalist observation"
+            : "NGO verification is required before preparing an iNaturalist draft";
         return `<tr id="inat-row-${i}">
-            <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" ${["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase()) ? "" : "disabled title=\"NGO verification is required before preparing an iNaturalist draft\""} onchange="App._updateInatSelectedCount()"></td>
+            <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" ${selectDisabled ? `disabled title="${selectTitle}"` : ""} onchange="App._updateInatSelectedCount()"></td>
             <td>${photo}</td>
             <td style="font-size:0.82rem">${this.esc(o.scientific_name || '—')}<br><span class="muted">${this.esc(o.common_name || '')}</span></td>
             <td>${typeLabel}</td>
@@ -2836,7 +2844,7 @@ Status: ${c.status}`;
             <td>${statusBadge}</td>
             <td>
                 <button class="btn-action" style="font-size:0.78rem" onclick="App.openObservationDetail(${o.id})">View</button>
-                ${o.observation_url ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${this.esc(o.observation_url)}" target="_blank" rel="noopener">Manage on iNaturalist ↗</a>` : `<button class="btn-action" style="font-size:0.78rem" onclick="App.linkInaturalistRecord(${o.id})">Link submitted record</button>`}
+                ${o.observation_url ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${this.esc(o.observation_url)}" target="_blank" rel="noopener">View iNaturalist record ↗</a>` : `<button class="btn-action" style="font-size:0.78rem" onclick="App.linkInaturalistRecord(${o.id})">Link submitted record</button>`}
                 ${o.verification_status !== 'confirmed' ? `<button class="btn-primary" style="font-size:0.78rem;padding:0.25rem 0.6rem" onclick="App._inatQuickConfirm(${i})">Confirm</button>` : ''}
             </td>
         </tr>`;
@@ -2893,6 +2901,7 @@ Status: ${c.status}`;
         const items = (this._inatQueue || []).filter(o =>
             ids.includes(String(o.id)) &&
             o.observation_type === "planted_rswf" &&
+            !o.observation_url &&
             ["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase())
         );
         if (!items.length) {
