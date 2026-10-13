@@ -153,6 +153,7 @@ const App = {
             "upload-photo-modal": () => this.closeUploadPhotoModal(),
             "plant-monitoring-modal": () => this.closeMonitoringModal(),
             "plant-history-modal": () => this.closePlantHistoryModal(),
+            "water-date-modal": () => this.closeWaterDateModal(),
             "ngo-auth-modal": () => this.closeAuthModal()
         };
         // Click on the dark backdrop (outside the card) closes the dialog
@@ -1200,8 +1201,11 @@ const App = {
                     : "—";
                 const canWater = w.bucket !== "skip";
                 const btn = canWater
-                    ? `<button class="btn-action success" onclick="App.markWatered(${Number(a.plant_id)}, ${this.esc(JSON.stringify(a.plant_code || ""))})" title="Record that this plant was watered today">💧 Mark watered</button>`
-                    : `<span class="faint">—</span>`;
+                    ? `<div style="display:flex;gap:0.35rem;flex-wrap:wrap">
+                        <button class="btn-action success" style="padding:0.25rem 0.55rem;font-size:0.78rem" onclick="App.markWatered(${Number(a.plant_id)}, ${this.esc(JSON.stringify(a.plant_code || ""))})" title="Quick mark: watered today">✓ Today</button>
+                        <button class="btn-action" style="padding:0.25rem 0.55rem;font-size:0.78rem" onclick="App.openWaterDateModal(${Number(a.plant_id)}, ${this.esc(JSON.stringify(a.plant_code || ""))}, ${this.esc(JSON.stringify(w.last_watered || ""))})" title="Edit or pick custom watering date">✏️ Edit Date</button>
+                       </div>`
+                    : `<button class="btn-action" style="padding:0.25rem 0.55rem;font-size:0.78rem" onclick="App.openWaterDateModal(${Number(a.plant_id)}, ${this.esc(JSON.stringify(a.plant_code || ""))}, ${this.esc(JSON.stringify(w.last_watered || ""))})" title="Set watering date">✏️ Set Date</button>`;
                 return `
                     <tr>
                         <td>${bucketPill(w.bucket)}</td>
@@ -1217,6 +1221,48 @@ const App = {
             }).join("");
         } catch (err) {
             tbody.innerHTML = `<tr class="empty-row"><td colspan="8" style="color:#f87171">Could not load watering queue: ${this.esc(err.message)}</td></tr>`;
+        }
+    },
+
+    openWaterDateModal(plantId, plantCode, lastWateredDate) {
+        this.requireAuth(() => this._doOpenWaterDateModal(plantId, plantCode, lastWateredDate));
+    },
+
+    _doOpenWaterDateModal(plantId, plantCode, lastWateredDate) {
+        this.currentWateringPlantId = plantId;
+        const sub = document.getElementById("water-modal-subtitle");
+        if (sub) sub.textContent = `Plant ${plantCode}: set or adjust the last watered date. The next due date and status will recalculate accordingly.`;
+        const dateInput = document.getElementById("water-modal-date");
+        if (dateInput) {
+            dateInput.value = lastWateredDate || new Date().toISOString().split("T")[0];
+            dateInput.max = new Date().toISOString().split("T")[0];
+        }
+        const obsInput = document.getElementById("water-modal-observer");
+        if (obsInput) obsInput.value = "RSWF Field Team";
+        const modal = document.getElementById("water-date-modal");
+        if (modal) modal.style.display = "flex";
+    },
+
+    closeWaterDateModal() {
+        const modal = document.getElementById("water-date-modal");
+        if (modal) modal.style.display = "none";
+        this.currentWateringPlantId = null;
+    },
+
+    async handleWaterDateSubmit(e) {
+        e.preventDefault();
+        const plantId = this.currentWateringPlantId;
+        if (!plantId) return;
+        const onDate = document.getElementById("water-modal-date").value;
+        const observer = document.getElementById("water-modal-observer").value.trim() || null;
+        try {
+            await ApiService.markPlantWatered(plantId, onDate, observer);
+            this.closeWaterDateModal();
+            this.notify(`💧 Plant #${plantId} watering date updated to ${onDate}.`);
+            await this.loadWateringQueue();
+            this.loadWaterKpi();
+        } catch (err) {
+            this.notify(`Could not update watering date: ${err.message}`, "error", 7000);
         }
     },
 

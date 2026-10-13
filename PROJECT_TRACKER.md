@@ -81,6 +81,22 @@
 
 ---
 
+### 🚀 Phase 24: Field Workflow Streamlining, Database Re-architecture & Live UI Polish (Completed October 2026)
+- **Database Centralization**: Renamed "Manage Plantations" to "🗄️ Database" across navigation and section headers; surfaced direct "➕ Add Planted Plant" action alongside upload tools so RSWF team can edit, add, and monitor records without confusing submenus.
+- **2-Button Upload Modal Interface**: Streamlined photo upload entry points into "Single Photo Upload" and "Bulk Upload", with universal `Sighted (Wild)` vs `Planted by RSWF` radio classification directly wired into backend persistence.
+- **Custom Watering Date & Dynamic Due Date Calculation**:
+  - Enhanced the Watering Queue (`frontend/js/app.js` and `frontend/index.html`) with dual action buttons: `✓ Today` for instant one-click logging and `✏️ Edit Date` for past/custom date corrections.
+  - Added dedicated `water-date-modal` to select any past watering date.
+  - Live recalculation of next due date, days overdue, and status bucket (`overdue`, `due_soon`, `ok`, `skip`) powered by `watering_service.py`.
+- **iNaturalist Verification & Upload Workflow**:
+  - Replaced legacy verification card with a bulk selectable queue table (`#tab-verify`) showing exclusively recent RSWF field observations (reference iNaturalist data strictly protected as read-only).
+  - One-click launch opens pre-validated, pre-filled observation forms on `inaturalist.org` with GPS coordinates, taxonomic identification, and project metadata tags.
+- **CDN Cache-Busting & Live Deploy Sync**:
+  - Bumped frontend script tags to `?v=v2026.10.13-2` to eliminate Cloudflare/browser edge caching conflicts and stale DOM property errors (`setting 'textContent' of null`).
+  - Synced and deployed cleanly across both `ppriyansh-05/Service-learning---NATURE-COPILOT-` and `ranjanvrma/van-udhyan` production repositories.
+
+---
+
 ### 📍 Phase 1 Execution Summary & Geographical Foundation
 - **Phase Status:** ✅ `COMPLETED`
 - **Location:** Bavdhan Van Udyan (Plus Code: `GQ9J+74Q`, Address: Lantana Gardens, Bavdhan, Pune, Maharashtra 411021)
