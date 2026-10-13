@@ -857,9 +857,7 @@ class DataService:
             if len(filtered) == len(ngo_records):
                 return False
 
-            with open(ngo_store_path, "w", encoding="utf-8") as f:
-                json.dump(filtered, f, indent=2)
-
+            save_ngo_observations_store(filtered)
             return True
         except Exception:
             return False
@@ -902,9 +900,7 @@ class DataService:
                 raise ValueError("Use a valid iNaturalist observation URL, e.g. https://www.inaturalist.org/observations/123456.")
             target["observation_url"] = url
 
-        with open(ngo_store_path, "w", encoding="utf-8") as f:
-            json.dump(ngo_records, f, indent=2)
-
+        save_ngo_observations_store(ngo_records)
         return target
 
     # =====================================================================
