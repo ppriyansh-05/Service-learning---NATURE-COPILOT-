@@ -843,3 +843,12 @@ Key Changes:
 - A planted-tree row remains visible while pending, but selection is enabled only after the NGO identification status is `verified` or `corrected`. The action rechecks those conditions before opening drafts.
 - The action opens prefilled iNaturalist observation-creation pages. The reviewer must sign in on iNaturalist, attach/review the photo and metadata, and submit there. Nature Copilot does not collect iNaturalist credentials or directly publish through the API.
 - Verification status: source changes committed on the feature branch only. No automated tests, live iNaturalist submission, or production deployment were run from this environment.
+
+---
+
+### Follow-up — iNaturalist Status Without Affecting Plant Care — 2026-10-14
+- **iNaturalist Upload Queue UI:** A planted-tree NGO observation with a saved valid `observation_url` now displays **Uploaded to iNaturalist** and offers a direct link to the external record.
+- **Duplicate submission guard:** Records already linked to iNaturalist are no longer selectable for preparing another draft from the queue.
+- **Record ownership:** The upload link remains attached to the existing NGO observation; this UI change does not create another observation or delete/replace the planted-plant management record.
+- **Monitoring and watering:** No planted-plant records, plant status, watering fields, or monitoring history are changed by saving an iNaturalist observation URL. The existing planted-plant register remains the source for care and watering workflows.
+- **Verification status:** Code committed to `fix/planted-registration-compliance-inat-ux`. No automated tests, browser runtime checks, or deployment were run for this follow-up. The change is not live until the branch is merged and the relevant deployment completes.
