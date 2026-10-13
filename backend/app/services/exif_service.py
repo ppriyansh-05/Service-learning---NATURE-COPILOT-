@@ -174,8 +174,9 @@ def parse_gps_from_text(text: str) -> Tuple[Optional[float], Optional[float]]:
 
     text_clean = text.replace("°", " ").replace("\n", " ").replace("\r", " ")
 
-    # Pattern 1: Explicit Latitude ... Longitude labels
-    # e.g., Lat 18.518511 Long 73.7802, Latitude: 18.518511, Longitude: 73.7802
+    # GPS Map Camera labels are sometimes returned by OCR with no spaces:
+    # "Lat18.518675°Long73.780059°". Keep the labels and decimal coordinates
+    # parseable even when whitespace is lost.
     m1 = re.search(
         r'(?:lat|latitude)\s*[:=]?\s*([+-]?\d{1,2}(?:\.\d{2,8})?)\s*([NSns])?[^\d\n\r]*(?:lon|long|longitude)\s*[:=]?\s*([+-]?\d{1,3}(?:\.\d{2,8})?)\s*([EWew])?',
         text_clean,
