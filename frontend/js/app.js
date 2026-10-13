@@ -2998,14 +2998,61 @@ Status: ${c.status}`;
         const files = e.dataTransfer ? Array.from(e.dataTransfer.files) : Array.from(e.target.files || []);
         const imgs = files.filter(f => /\.(jpe?g|png|webp)$/i.test(f.name));
         if (!imgs.length) { this.notify("No JPG/PNG/WEBP files found.", "error"); return; }
-        if (imgs.length > 50) { this.notify("At most 50 files per batch.", "error"); return; }
+        const MAX_FILE_BYTES = 15 * 1024 * 1024;
+        const tooLarge = imgs.filter(f => f.size > MAX_FILE_BYTES);
+        if (tooLarge.length) {
+            this.notify(`These files exceed 15 MB: ${tooLarge.slice(0, 3).map(f => f.name).join(", ")}${tooLarge.length > 3 ? "…" : ""}. Compress them and retry.`, "error", 7000);
+            return;
+        }
         const obsType = document.querySelector('input[name="bulk-obs-type"]:checked')?.value || "sighted";
         const prog = document.getElementById("bulk-progress");
         prog.style.display = "block";
-        prog.textContent = `Uploading ${imgs.length} files…`;
+        prog.style.color = "";
+        prog.textContent = `Preparing ${imgs.length} photos for upload…`;
         try {
-            const res = await ApiService.bulkUploadPhotos(imgs, { obsType });
-            prog.textContent = `Done: ${res.summary.ok} ok · ${res.summary.needs_confirmation} need confirmation · ${res.summary.duplicates} duplicates · ${res.summary.rejected} rejected · ${res.summary.errors} errors.`;
+            // There is no practical unlimited single HTTP request. Split the selection into
+            // small requests so the combined payload stays below typical hosting body limits.
+            // The user can select more than 50 files; only each individual photo remains capped.
+            const MAX_CHUNK_BYTES = 10 * 1024 * 1024;
+            const MAX_CHUNK_FILES = 2;
+            const chunks = [];
+            let chunk = [];
+            let chunkBytes = 0;
+            for (const file of imgs) {
+                if (chunk.length && (chunk.length >= MAX_CHUNK_FILES || chunkBytes + file.size > MAX_CHUNK_BYTES)) {
+                    chunks.push(chunk);
+                    chunk = [];
+                    chunkBytes = 0;
+                }
+                chunk.push(file);
+                chunkBytes += file.size;
+            }
+            if (chunk.length) chunks.push(chunk);
+
+            const allResults = [];
+            const summary = { ok: 0, needs_confirmation: 0, duplicates: 0, rejected: 0, errors: 0 };
+            for (let i = 0; i < chunks.length; i++) {
+                prog.textContent = `Uploading batch ${i + 1}/${chunks.length} (${allResults.length}/${imgs.length} photos completed)…`;
+                try {
+                    const batch = await ApiService.bulkUploadPhotos(chunks[i], { obsType });
+                    allResults.push(...(batch.results || []));
+                    for (const key of Object.keys(summary)) summary[key] += Number(batch.summary?.[key] || 0);
+                } catch (batchErr) {
+                    // Preserve completed batches and report failed files explicitly. Do not silently
+                    // replay successful batches, since that could create duplicate observations.
+                    for (const file of chunks[i]) {
+                        allResults.push({
+                            filename: file.name,
+                            ok: false,
+                            status: "error",
+                            error: `Batch upload failed: ${batchErr.message || String(batchErr)}`
+                        });
+                        summary.errors += 1;
+                    }
+                }
+            }
+            const res = { results: allResults, summary };
+            prog.textContent = `Uploads finished: ${summary.ok} ok · ${summary.needs_confirmation} need confirmation · ${summary.duplicates} duplicates · ${summary.rejected} rejected · ${summary.errors} errors.`;
             // Run Pl@ntNet separately for each saved observation so predictions stay
             // attached to the correct photo. Location-confirmation rows have no observation ID yet.
             const bulkRows = [];
