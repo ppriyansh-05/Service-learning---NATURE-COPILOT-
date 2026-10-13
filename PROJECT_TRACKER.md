@@ -859,3 +859,10 @@ Key Changes:
 - **Static false-data check:** The tracked `data/processed/planted_plants_store.json`, `data/processed/ngo_observations_store.json`, and `data/processed/plant_monitoring_store.json` files are empty arrays (`[]`) on this branch. The planted-plant fallback defaults in `data_service.py` are also empty. No sample plant or NGO observation records were found in those inspected stores.
 - **Limits:** This was a GitHub source/data-file inspection, not a runtime audit. Production database/cloud-sync contents, deployed frontend/backend, uploaded user dataset, generated exports, and all repository files have not been exhaustively verified. No automated tests or live API checks were run, and nothing was deployed.
 - **Next required step:** Import only the genuine dataset collected by the team; reconcile duplicates and validate species, dates, photos, coordinates and zone assignments against source records before publishing eligible observations to iNaturalist. Do not create placeholder or synthetic production records.
+
+### Nature Copilot header and bulk upload — 2026-10-14
+- Top-left sidebar brand changed to “Nature Copilot”; the main page title and Van Udyan/RSWF project references remain unchanged.
+- Bulk upload selection no longer has a fixed 50-photo cap. It processes selections as sequential requests of up to 2 files / approximately 10 MiB per batch, with a 15 MiB per-photo validation limit.
+- Successful observations use the existing Pl@ntNet identification API separately; results display up to three predictions and an Edit action that opens the existing observation review/detail view. Pending GPS confirmation and prediction failures are shown per row.
+- Frontend app cache-buster updated.
+- JavaScript syntax check passed. Real uploads, API prediction response compatibility, browser behavior, and Render deployment have not yet been verified.

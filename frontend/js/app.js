@@ -2998,25 +2998,84 @@ Status: ${c.status}`;
         const files = e.dataTransfer ? Array.from(e.dataTransfer.files) : Array.from(e.target.files || []);
         const imgs = files.filter(f => /\.(jpe?g|png|webp)$/i.test(f.name));
         if (!imgs.length) { this.notify("No JPG/PNG/WEBP files found.", "error"); return; }
-        if (imgs.length > 50) { this.notify("At most 50 files per batch.", "error"); return; }
+        const MAX_FILE_BYTES = 15 * 1024 * 1024;
+        const tooLarge = imgs.filter(f => f.size > MAX_FILE_BYTES);
+        if (tooLarge.length) {
+            this.notify(`These files exceed 15 MB: ${tooLarge.slice(0, 3).map(f => f.name).join(", ")}${tooLarge.length > 3 ? "…" : ""}. Compress them and retry.`, "error", 7000);
+            return;
+        }
         const obsType = document.querySelector('input[name="bulk-obs-type"]:checked')?.value || "sighted";
         const prog = document.getElementById("bulk-progress");
         prog.style.display = "block";
-        prog.textContent = `Uploading ${imgs.length} files…`;
+        prog.style.color = "";
+        prog.textContent = `Preparing ${imgs.length} photos for upload…`;
         try {
-            const res = await ApiService.bulkUploadPhotos(imgs, { obsType });
+            const MAX_CHUNK_BYTES = 10 * 1024 * 1024;
+            const MAX_CHUNK_FILES = 2;
+            const chunks = [];
+            let chunk = [];
+            let chunkBytes = 0;
+            for (const file of imgs) {
+                if (chunk.length && (chunk.length >= MAX_CHUNK_FILES || chunkBytes + file.size > MAX_CHUNK_BYTES)) {
+                    chunks.push(chunk); chunk = []; chunkBytes = 0;
+                }
+                chunk.push(file); chunkBytes += file.size;
+            }
+            if (chunk.length) chunks.push(chunk);
+            const allResults = [];
+            const summary = { ok: 0, needs_confirmation: 0, duplicates: 0, rejected: 0, errors: 0 };
+            for (let i = 0; i < chunks.length; i++) {
+                prog.textContent = `Uploading batch ${i + 1}/${chunks.length} (${allResults.length}/${imgs.length} photos completed)…`;
+                try {
+                    const batch = await ApiService.bulkUploadPhotos(chunks[i], { obsType });
+                    allResults.push(...(batch.results || []));
+                    for (const key of Object.keys(summary)) summary[key] += Number(batch.summary?.[key] || 0);
+                } catch (batchErr) {
+                    for (const file of chunks[i]) {
+                        allResults.push({ filename: file.name, ok: false, status: "error", error: `Batch upload failed: ${batchErr.message || String(batchErr)}` });
+                        summary.errors += 1;
+                    }
+                }
+            }
+            const res = { results: allResults, summary };
+            // Identify each saved observation independently; a failed prediction does not stop the batch.
+            const bulkRows = [];
+            for (let i = 0; i < (res.results || []).length; i++) {
+                const r = res.results[i];
+                let predictions = [];
+                let predictionMessage = "";
+                if (r.observation_id && r.ok && !r.requires_confirmation) {
+                    try {
+                        const ai = await ApiService.identifyObservationPlant(r.observation_id, "auto");
+                        predictions = Array.isArray(ai.predictions) ? ai.predictions : [];
+                        if (!predictions.length) predictionMessage = ai.result_summary?.message || "No prediction returned";
+                    } catch (aiErr) { predictionMessage = aiErr.message || "Prediction unavailable"; }
+                } else if (r.requires_confirmation) predictionMessage = "Confirm GPS location before prediction";
+                else predictionMessage = "Prediction unavailable for this upload";
+                bulkRows.push({ result: r, predictions, predictionMessage });
+                prog.textContent = `Processed ${i + 1}/${res.results.length} upload results; checking predictions…`;
+            }
             prog.textContent = `Done: ${res.summary.ok} ok · ${res.summary.needs_confirmation} need confirmation · ${res.summary.duplicates} duplicates · ${res.summary.rejected} rejected · ${res.summary.errors} errors.`;
-            const rows = (res.results || []).map(r => {
+            const rows = bulkRows.map(({ result: r, predictions, predictionMessage }) => {
                 const badge = r.ok ? (r.requires_confirmation ? '<span class="pill pill-orange">needs GPS confirmation</span>' : '<span class="pill pill-green">saved</span>') :
                     r.status === "duplicate" ? '<span class="pill pill-purple">duplicate</span>' :
                     r.status === "no_gps" ? '<span class="pill pill-grey">no GPS</span>' :
-                    '<span class="pill pill-grey">' + (r.status || "error") + '</span>';
+                    '<span class="pill pill-grey">' + this.esc(r.status || "error") + '</span>';
                 const msg = r.error || r.message || (r.observation_id ? `#${r.observation_id} · ${r.zone || ""}` : "");
-                return `<tr><td>${r.filename}</td><td>${badge}</td><td class="muted">${msg}</td></tr>`;
+                const predictionHtml = predictions.length ? predictions.slice(0, 3).map(p => {
+                    const name = this.esc(p.scientific_name || p.name || "Unknown");
+                    const common = p.common_name ? ` <span class="muted">(${this.esc(p.common_name)})</span>` : "";
+                    const score = p.confidence_percentage || p.score || p.confidence || "";
+                    return `<div><i>${name}</i>${common}${score !== "" ? ` <span class="conf">${this.esc(String(score))}</span>` : ""}</div>`;
+                }).join("") : `<span class="muted">${this.esc(predictionMessage || "No prediction available")}</span>`;
+                const editAction = r.observation_id && r.ok && !r.requires_confirmation
+                    ? `<button type="button" class="btn-primary btn-small" style="white-space:nowrap" onclick="App.openObservationDetail(${Number(r.observation_id)})">✏️ Edit</button>`
+                    : `<span class="muted">${r.requires_confirmation ? "Confirm location first" : "—"}</span>`;
+                return `<tr><td>${this.esc(r.filename || "Photo")}</td><td>${badge}</td><td>${predictionHtml}</td><td class="muted">${this.esc(String(msg))}</td><td>${editAction}</td></tr>`;
             }).join("");
             document.getElementById("bulk-results").innerHTML = `
                 <table class="data-table" style="margin-top:0.75rem">
-                    <thead><tr><th>File</th><th>Result</th><th>Note</th></tr></thead>
+                    <thead><tr><th>File</th><th>Result</th><th>Plant prediction</th><th>Note</th><th>Action</th></tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
                 <div style="display:flex;justify-content:flex-end;margin-top:0.75rem">
