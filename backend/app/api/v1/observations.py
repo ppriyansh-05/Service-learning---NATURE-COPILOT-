@@ -152,6 +152,7 @@ def confirm_geotag_location(
             observer=req.observer,
             notes=req.notes,
             allow_nearby_duplicate=allow_nearby_duplicate,
+            observation_type=req.observation_type or "sighted",
         )
         return res
     except DuplicateObservationError as e:
