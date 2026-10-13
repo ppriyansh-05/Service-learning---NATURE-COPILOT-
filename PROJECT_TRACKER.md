@@ -793,3 +793,11 @@ Key Changes:
 - `scripts/` : Data validation, EXIF parsing & automated regression test runners
 - `docs/` : Master technical documentation & architectural guides
 
+---
+
+### Production Fix — Docker Runtime Permissions for Field Upload Persistence (2026-10-14)
+- Root cause confirmed from the Render traceback: PermissionError [Errno 13] on /app/data/processed/ngo_observations_store.json inside the persistence function after POST /api/v1/observations/upload reached the save step. The Docker image runs the API as unprivileged UID/GID 1001 but only grants write access to uploads, thumbnails, and logs. The mutable processed JSON stores and their parent directory remained root-owned.
+- Fix prepared on branch fix/gps-visible-geotag-bulk-upload: update backend/Dockerfile so the runtime user owns the processed directory and the four mutable JSON state files (NGO observations, planted plants, monitoring, and AI predictions). Static iNaturalist CSV and geographic reference files are not chowned by this change.
+- Data safety: no observations, planted-plant records, iNaturalist data, or stored photos were deleted or seeded. No test uploads were sent to production.
+- Verification status: Docker build, automated tests, deployment, and live upload verification have not yet been run in this environment. Do not mark this fix as deployed until Render builds the branch and the live upload is verified.
+- Related separate issue: bulk requests can exceed the configured 16 MiB request-body limit even when each photo is below the 10 MiB per-file limit. This is distinct from the confirmed filesystem permission failure and needs a separate bounded-batch fix / validation.
