@@ -852,3 +852,10 @@ Key Changes:
 - **Record ownership:** The upload link remains attached to the existing NGO observation; this UI change does not create another observation or delete/replace the planted-plant management record.
 - **Monitoring and watering:** No planted-plant records, plant status, watering fields, or monitoring history are changed by saving an iNaturalist observation URL. The existing planted-plant register remains the source for care and watering workflows.
 - **Verification status:** Code committed to `fix/planted-registration-compliance-inat-ux`. No automated tests, browser runtime checks, or deployment were run for this follow-up. The change is not live until the branch is merged and the relevant deployment completes.
+
+
+### Final pre-dataset review — 2026-10-14
+- **Biodiversity Map legend:** Changed the “RSWF planted plant” legend dot from blue to red, matching the red fill used for planted-plant map markers. RSWF planted observations marked `planted_rswf` also use red; other RSWF field uploads remain orange and iNaturalist observations remain green.
+- **Static false-data check:** The tracked `data/processed/planted_plants_store.json`, `data/processed/ngo_observations_store.json`, and `data/processed/plant_monitoring_store.json` files are empty arrays (`[]`) on this branch. The planted-plant fallback defaults in `data_service.py` are also empty. No sample plant or NGO observation records were found in those inspected stores.
+- **Limits:** This was a GitHub source/data-file inspection, not a runtime audit. Production database/cloud-sync contents, deployed frontend/backend, uploaded user dataset, generated exports, and all repository files have not been exhaustively verified. No automated tests or live API checks were run, and nothing was deployed.
+- **Next required step:** Import only the genuine dataset collected by the team; reconcile duplicates and validate species, dates, photos, coordinates and zone assignments against source records before publishing eligible observations to iNaturalist. Do not create placeholder or synthetic production records.
