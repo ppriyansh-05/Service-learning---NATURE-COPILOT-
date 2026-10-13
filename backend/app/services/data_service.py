@@ -1586,19 +1586,15 @@ class DataService:
         if decision_clean not in {"confirm", "correct", "needs_review"}:
             raise ValueError(f"Invalid verification decision '{decision}'. Must be 'confirm', 'correct', or 'needs_review'.")
 
-        # 1. Retrieve observation
-        records = load_clean_csv_records()
-        obs = None
-        for r in records:
-            if r.get("id") == obs_id:
-                obs = r
-                break
-
+        # 1. Verification is only for RSWF-owned uploads. Look in that store first
+        # so a numeric ID collision with an imported iNaturalist row cannot target the wrong record.
+        ngo_records = load_ngo_observations_store()
+        obs = next((r for r in ngo_records if r.get("id") == obs_id), None)
         if not obs:
-            raise ValueError(f"Observation with ID {obs_id} not found.")
-
-        if obs.get("source") == "iNaturalist":
-            raise PermissionError(f"Original iNaturalist observation #{obs_id} is read-only reference data and cannot be modified.")
+            raise ValueError(
+                f"RSWF observation #{obs_id} was not found. Only NGO-uploaded observations can be verified here; "
+                "iNaturalist reference records are read-only."
+            )
 
         # 2. Get latest AI prediction from repository
         latest_pred = DataService.get_observation_ai_predictions(obs_id)
@@ -1639,39 +1635,35 @@ class DataService:
             status_code = "needs_review"
             quality_grade = "needs_id"
 
-        # 3. Update NGO Observation Record in Store
-        ngo_store_path = os.path.join(get_base_dir(), "data", "processed", "ngo_observations_store.json")
-        if os.path.exists(ngo_store_path):
-            with open(ngo_store_path, "r", encoding="utf-8") as f:
-                ngo_records = json.load(f)
+        # 3. Update the NGO store through its shared persistence helper so cloud state
+        # sync is updated as well as the local JSON store.
+        target = next((r for r in ngo_records if r.get("id") == obs_id), None)
+        if not target:
+            raise ValueError(f"RSWF observation #{obs_id} not found in NGO store.")
 
-            for r in ngo_records:
-                if r.get("id") == obs_id:
-                    r["scientific_name"] = verified_sci
-                    r["common_name"] = verified_com
-                    r["identification_status"] = status_code
-                    r["quality_grade"] = quality_grade
-                    # Strip stale "Not yet confirmed" phrases once the record is reviewed
-                    existing_notes = (r.get("verification_notes") or "").strip()
-                    if decision_clean in ("confirm", "correct"):
-                        import re as _re
-                        existing_notes = _re.sub(
-                            r"Not yet confirmed by RSWF\.?",
-                            "",
-                            existing_notes,
-                            flags=_re.IGNORECASE,
-                        ).strip(" \n\t.;,")
-                    review_line = f"Review ({decision_clean}): {notes}" if notes else None
-                    if review_line and existing_notes:
-                        r["verification_notes"] = f"{existing_notes}\n{review_line}"
-                    elif review_line:
-                        r["verification_notes"] = review_line
-                    else:
-                        r["verification_notes"] = existing_notes or None
-                    break
+        target["scientific_name"] = verified_sci
+        target["common_name"] = verified_com
+        target["identification_status"] = status_code
+        target["quality_grade"] = quality_grade
+        # Strip stale "Not yet confirmed" phrases once the record is reviewed.
+        existing_notes = (target.get("verification_notes") or "").strip()
+        if decision_clean in ("confirm", "correct"):
+            import re as _re
+            existing_notes = _re.sub(
+                r"Not yet confirmed by RSWF\.?",
+                "",
+                existing_notes,
+                flags=_re.IGNORECASE,
+            ).strip(" \n\t.;,")
+        review_line = f"Review ({decision_clean}): {notes}" if notes else None
+        if review_line and existing_notes:
+            target["verification_notes"] = f"{existing_notes}\n{review_line}"
+        elif review_line:
+            target["verification_notes"] = review_line
+        else:
+            target["verification_notes"] = existing_notes or None
 
-            with open(ngo_store_path, "w", encoding="utf-8") as f:
-                json.dump(ngo_records, f, indent=2)
+        save_ngo_observations_store(ngo_records)
 
         # 4. Update Database Repository Prediction Audit Record (preserving original AI prediction fields intact!)
         import datetime
