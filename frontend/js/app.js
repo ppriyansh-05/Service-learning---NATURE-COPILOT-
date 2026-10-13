@@ -2772,7 +2772,8 @@ Status: ${c.status}`;
         try {
             // fetch only NGO-uploaded observations (source != iNaturalist)
             const all = await ApiService.getObservations({ source: "NGO / New Upload", limit: 200 });
-            const items = (all.observations || all || []).filter(o => o.source !== "iNaturalist");
+            const records = Array.isArray(all) ? all : (all.data || all.observations || []);
+            const items = records.filter(o => o.source !== "iNaturalist");
             this._inatQueue = items;
             if (!items.length) {
                 empty.innerHTML = `<div style="font-size:2.5rem;margin-bottom:0.5rem">🌿</div><div>No RSWF-uploaded observations yet. Upload photos from the <b>Manage Plantations</b> tab and they will appear here.</div>`;
@@ -2827,6 +2828,7 @@ Status: ${c.status}`;
             <td>${statusBadge}</td>
             <td>
                 <button class="btn-action" style="font-size:0.78rem" onclick="App.openObservationDetail(${o.id})">View</button>
+                ${o.observation_url ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${this.esc(o.observation_url)}" target="_blank" rel="noopener">Manage on iNaturalist ↗</a>` : `<button class="btn-action" style="font-size:0.78rem" onclick="App.linkInaturalistRecord(${o.id})">Link submitted record</button>`}
                 ${o.verification_status !== 'confirmed' ? `<button class="btn-primary" style="font-size:0.78rem;padding:0.25rem 0.6rem" onclick="App._inatQuickConfirm(${i})">Confirm</button>` : ''}
             </td>
         </tr>`;
@@ -2856,6 +2858,24 @@ Status: ${c.status}`;
             this.notify(`Observation #${o.id} confirmed ✔`, "success");
             await this.loadInatUploadQueue();
         } catch (e) { this.notify(`Failed: ${e.message}`, "error"); }
+    },
+
+    async linkInaturalistRecord(obsId) {
+        if (!ApiService.getNgoPassword()) { this.openAuthModal(); return; }
+        const url = window.prompt("After submitting on iNaturalist, paste the new observation URL (https://www.inaturalist.org/observations/123456).");
+        if (url === null) return;
+        const clean = url.trim();
+        if (!/^https:\/\/www\.inaturalist\.org\/observations\/\d+(?:[?#].*)?$/.test(clean)) {
+            this.notify("Enter a valid iNaturalist observation URL.", "warning");
+            return;
+        }
+        try {
+            await ApiService.updateObservation(obsId, { observation_url: clean });
+            this.notify("iNaturalist record link saved. Use “Manage on iNaturalist” to edit or delete it on iNaturalist.", "success", 7000);
+            await this.loadInatUploadQueue();
+        } catch (e) {
+            this.notify(`Could not save iNaturalist link: ${e.message}`, "error");
+        }
     },
 
     async uploadSelectedToInat() {
