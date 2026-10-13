@@ -894,6 +894,14 @@ class DataService:
             if field in update_data and update_data[field] is not None:
                 target[field] = safe_str(update_data[field])
 
+        if "observation_url" in update_data and update_data["observation_url"] is not None:
+            url = safe_str(update_data["observation_url"])
+            prefix = "https://www.inaturalist.org/observations/"
+            observation_id = url[len(prefix):].split("?", 1)[0].split("#", 1)[0].strip("/") if url else ""
+            if not url.startswith(prefix) or not observation_id.isdigit():
+                raise ValueError("Use a valid iNaturalist observation URL, e.g. https://www.inaturalist.org/observations/123456.")
+            target["observation_url"] = url
+
         with open(ngo_store_path, "w", encoding="utf-8") as f:
             json.dump(ngo_records, f, indent=2)
 
