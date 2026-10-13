@@ -2991,12 +2991,150 @@ Status: ${c.status}`;
     },
     closeBulkUploadModal() { document.getElementById("bulk-upload-modal").style.display = "none"; },
 
+    async keepBulkDuplicate(index) {
+        const row = this.bulkReviewRows?.[index];
+        if (!row || row.result.status !== "duplicate") return;
+        const dup = row.result.duplicate || {};
+        if (dup.duplicate_kind !== "nearby" && !dup.overridable) {
+            this.notify("This is the same photo already recorded. Open the existing observation or discard this duplicate row.", "warning", 6500);
+            if (dup.existing_observation_id) this.openObservationDetail(dup.existing_observation_id);
+            return;
+        }
+        const file = row.file;
+        if (!file) { this.notify("Original photo is no longer available in this review. Please select it again.", "error"); return; }
+        const obsType = document.getElementById(`bulk-row-type-${index}`)?.value || row.obsType || "sighted";
+        const btn = document.getElementById(`bulk-row-keep-${index}`);
+        if (btn) { btn.disabled = true; btn.textContent = "Keeping…"; }
+        try {
+            const batch = await ApiService.bulkUploadPhotos([file], { obsType, allowNearbyDuplicate: true });
+            const saved = (batch.results || [])[0];
+            if (!saved || !saved.ok) throw new Error(saved?.error || saved?.message || "Could not keep this nearby duplicate.");
+            row.result = saved;
+            row.predictions = [];
+            row.predictionMessage = "Prediction not run yet";
+            if (saved.observation_id) {
+                try {
+                    const ai = await ApiService.identifyObservationPlant(saved.observation_id, "auto");
+                    row.predictions = Array.isArray(ai.predictions) ? ai.predictions : [];
+                    row.predictionMessage = ai.result_summary?.message || "No prediction returned";
+                } catch (aiErr) { row.predictionMessage = aiErr.message || "Prediction unavailable"; }
+            }
+            this.renderBulkReviewRows();
+            this.notify("Nearby photo kept as a separate observation. Please review the species and details.", "success", 6000);
+        } catch (err) {
+            row.keepError = err.message || String(err);
+            this.renderBulkReviewRows();
+            this.notify(`Could not keep duplicate: ${row.keepError}`, "error", 7000);
+        }
+    },
+
+    discardBulkRow(index) {
+        if (!this.bulkReviewRows || !this.bulkReviewRows[index]) return;
+        const row = this.bulkReviewRows[index];
+        if (row.result?.ok && row.result?.observation_id) {
+            this.notify("This photo is already saved. Discard only hides it from this review; it does not delete the saved observation.", "warning", 7000);
+        }
+        this.bulkReviewRows[index].discarded = true;
+        this.renderBulkReviewRows();
+    },
+
+    async saveBulkRow(index) {
+        const row = this.bulkReviewRows?.[index];
+        const r = row?.result;
+        if (!r?.observation_id || !r.ok || r.requires_confirmation) {
+            this.notify("Save is available after the photo has a saved observation record and any GPS confirmation is complete.", "warning", 6000);
+            return;
+        }
+        const value = (id) => document.getElementById(`bulk-row-${id}-${index}`)?.value ?? "";
+        const payload = {
+            scientific_name: value("scientific").trim() || null,
+            common_name: value("common").trim() || null,
+            observed_on: value("date") || null,
+            observer: value("observer").trim() || null,
+            notes: value("notes").trim() || null,
+            observation_type: value("type") || row.obsType || "sighted"
+        };
+        const btn = document.getElementById(`bulk-row-save-${index}`);
+        if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+        try {
+            await ApiService.updateObservation(r.observation_id, payload);
+            if (payload.scientific_name) {
+                await ApiService.verifyObservation(r.observation_id, {
+                    decision: "correct",
+                    selected_prediction_rank: 1,
+                    scientific_name: payload.scientific_name,
+                    common_name: payload.common_name,
+                    notes: payload.notes || "Species name edited during bulk upload review."
+                });
+            }
+            row.savedDetails = true;
+            this.notify(`Bulk row saved for observation #${r.observation_id}.`, "success");
+            await this.loadObservations();
+            this.renderBulkReviewRows();
+        } catch (err) {
+            if (btn) { btn.disabled = false; btn.textContent = "Save details"; }
+            this.notify(`Could not save bulk row: ${err.message}`, "error", 7000);
+        }
+    },
+
+    renderBulkReviewRows() {
+        const target = document.getElementById("bulk-results");
+        if (!target) return;
+        const rows = (this.bulkReviewRows || []).map((row, index) => {
+            if (row.discarded) return "";
+            const r = row.result || {};
+            const dup = r.duplicate || {};
+            const isDup = r.status === "duplicate";
+            const badge = r.ok ? (r.requires_confirmation ? '<span class="pill pill-orange">needs GPS confirmation</span>' : '<span class="pill pill-green">saved</span>') :
+                isDup ? '<span class="pill pill-purple">duplicate</span>' :
+                r.status === "no_gps" ? '<span class="pill pill-grey">no GPS</span>' :
+                '<span class="pill pill-grey">' + this.esc(r.status || "error") + '</span>';
+            const msg = r.error || r.message || (r.observation_id ? `#${r.observation_id} · ${r.zone || ""}` : dup.message || "");
+            const suggestions = row.predictions || [];
+            const predicted = suggestions[0] || {};
+            const name = predicted.scientific_name || predicted.name || r.scientific_name || "";
+            const common = predicted.common_name || r.common_name || "";
+            const predictionHtml = suggestions.length ? suggestions.slice(0, 3).map(p => {
+                const nm = this.esc(p.scientific_name || p.name || "Unknown");
+                const cm = p.common_name ? ` <span class="muted">(${this.esc(p.common_name)})</span>` : "";
+                const score = p.confidence_percentage || p.score || p.confidence || "";
+                return `<div><i>${nm}</i>${cm}${score !== "" ? ` <span class="conf">${this.esc(String(score))}</span>` : ""}</div>`;
+            }).join("") : `<span class="muted">${this.esc(row.predictionMessage || "No prediction available")}</span>`;
+            const canEdit = !!(r.ok && r.observation_id && !r.requires_confirmation);
+            const details = canEdit ? `
+                <details style="min-width:250px;margin-top:.5rem">
+                  <summary style="cursor:pointer;color:var(--v-accent,#10b981)">Edit details / predicted name</summary>
+                  <div style="display:grid;gap:.4rem;min-width:230px;padding:.5rem 0">
+                    <label class="muted">Scientific / predicted name<input id="bulk-row-scientific-${index}" value="${this.esc(name)}" placeholder="Enter or correct species name" style="width:100%"></label>
+                    <label class="muted">Common name<input id="bulk-row-common-${index}" value="${this.esc(common)}" placeholder="Common name" style="width:100%"></label>
+                    <label class="muted">Observation date<input id="bulk-row-date-${index}" type="date" value="${this.esc(r.observed_on || r.captured_at || "")}" style="width:100%"></label>
+                    <label class="muted">Observer<input id="bulk-row-observer-${index}" value="${this.esc(r.observer || "RSWF Field Volunteer")}" style="width:100%"></label>
+                    <label class="muted">Record type<select id="bulk-row-type-${index}" style="width:100%"><option value="sighted" ${(r.observation_type || row.obsType || "sighted") === "sighted" ? "selected" : ""}>Sighted</option><option value="planted_rswf" ${(r.observation_type || row.obsType) === "planted_rswf" ? "selected" : ""}>Planted by RSWF</option></select></label>
+                    <label class="muted">Notes<textarea id="bulk-row-notes-${index}" rows="2" placeholder="Field notes" style="width:100%">${this.esc(r.notes || "")}</textarea></label>
+                    <button id="bulk-row-save-${index}" type="button" class="btn-primary btn-small" onclick="App.saveBulkRow(${index})">Save details</button>
+                  </div>
+                </details>` : "";
+            const actions = isDup
+                ? `<div style="display:flex;gap:.35rem;flex-wrap:wrap"><button id="bulk-row-keep-${index}" type="button" class="btn-primary btn-small" onclick="App.keepBulkDuplicate(${index})">${(dup.duplicate_kind === "nearby" || dup.overridable) ? "Keep as separate" : "Open existing"}</button><button type="button" class="btn-action btn-small" onclick="App.discardBulkRow(${index})">Discard</button></div>`
+                : `<div style="display:flex;gap:.35rem;flex-wrap:wrap">${canEdit ? `<button type="button" class="btn-primary btn-small" onclick="App.openObservationDetail(${Number(r.observation_id)})">Open record</button>` : ""}<button type="button" class="btn-action btn-small" onclick="App.discardBulkRow(${index})">Discard row</button></div>${details}`;
+            return `<tr><td>${this.esc(r.filename || row.file?.name || "Photo")}</td><td>${badge}</td><td>${predictionHtml}</td><td class="muted">${this.esc(String(msg || row.keepError || ""))}</td><td>${actions}</td></tr>`;
+        }).join("");
+        const remaining = (this.bulkReviewRows || []).filter(r => !r.discarded).length;
+        target.innerHTML = `
+            <table class="data-table" style="margin-top:.75rem">
+              <thead><tr><th>File</th><th>Result</th><th>Plant prediction</th><th>Note</th><th>Review / action</th></tr></thead>
+              <tbody>${rows || '<tr><td colspan="5" class="muted">No rows left in this review.</td></tr>'}</tbody>
+            </table>
+            <p class="muted" style="font-size:.8rem;margin-top:.5rem">“Discard row” only removes the row from this review. It does not delete a saved observation. Exact duplicate photos cannot be saved twice; nearby-plant matches can be kept only when they are genuinely different plants.</p>
+            <div style="display:flex;justify-content:flex-end;margin-top:.75rem"><button class="btn-primary" onclick="App.closeBulkUploadModal(); App.loadObservations()">Done</button></div>`;
+    },
+
     async handleBulkDrop(e) {
         e.preventDefault();
         const dz = document.getElementById("bulk-dropzone");
         if (dz) dz.classList.remove("drag");
         const files = e.dataTransfer ? Array.from(e.dataTransfer.files) : Array.from(e.target.files || []);
-        const imgs = files.filter(f => /\.(jpe?g|png|webp)$/i.test(f.name));
+        const imgs = files.filter(f => /\\.(jpe?g|png|webp)$/i.test(f.name));
         if (!imgs.length) { this.notify("No JPG/PNG/WEBP files found.", "error"); return; }
         const MAX_FILE_BYTES = 15 * 1024 * 1024;
         const tooLarge = imgs.filter(f => f.size > MAX_FILE_BYTES);
@@ -3006,15 +3144,12 @@ Status: ${c.status}`;
         }
         const obsType = document.querySelector('input[name="bulk-obs-type"]:checked')?.value || "sighted";
         const prog = document.getElementById("bulk-progress");
-        prog.style.display = "block";
-        prog.style.color = "";
+        prog.style.display = "block"; prog.style.color = "";
         prog.textContent = `Preparing ${imgs.length} photos for upload…`;
+        this.bulkReviewRows = [];
         try {
-            const MAX_CHUNK_BYTES = 10 * 1024 * 1024;
-            const MAX_CHUNK_FILES = 2;
-            const chunks = [];
-            let chunk = [];
-            let chunkBytes = 0;
+            const MAX_CHUNK_BYTES = 10 * 1024 * 1024, MAX_CHUNK_FILES = 2;
+            const chunks = []; let chunk = [], chunkBytes = 0;
             for (const file of imgs) {
                 if (chunk.length && (chunk.length >= MAX_CHUNK_FILES || chunkBytes + file.size > MAX_CHUNK_BYTES)) {
                     chunks.push(chunk); chunk = []; chunkBytes = 0;
@@ -3022,87 +3157,51 @@ Status: ${c.status}`;
                 chunk.push(file); chunkBytes += file.size;
             }
             if (chunk.length) chunks.push(chunk);
-            const allResults = [];
-            const summary = { ok: 0, needs_confirmation: 0, duplicates: 0, rejected: 0, errors: 0 };
+            let completed = 0;
             for (let i = 0; i < chunks.length; i++) {
-                prog.textContent = `Uploading batch ${i + 1}/${chunks.length} (${allResults.length}/${imgs.length} photos completed)…`;
+                prog.textContent = `Uploading batch ${i + 1}/${chunks.length} (${completed}/${imgs.length} photos completed)…`;
+                let results = [];
                 try {
                     const batch = await ApiService.bulkUploadPhotos(chunks[i], { obsType });
-                    allResults.push(...(batch.results || []));
-                    for (const key of Object.keys(summary)) summary[key] += Number(batch.summary?.[key] || 0);
+                    results = batch.results || [];
                 } catch (batchErr) {
-                    for (const file of chunks[i]) {
-                        allResults.push({ filename: file.name, ok: false, status: "error", error: `Batch upload failed: ${batchErr.message || String(batchErr)}` });
-                        summary.errors += 1;
-                    }
+                    results = chunks[i].map(file => ({ filename: file.name, ok: false, status: "error", error: `Batch upload failed: ${batchErr.message || String(batchErr)}` }));
                 }
+                for (let j = 0; j < chunks[i].length; j++) {
+                    const file = chunks[i][j];
+                    const r = results[j] || { filename: file.name, ok: false, status: "error", error: "No result returned for this file." };
+                    const row = { file, result: r, predictions: [], predictionMessage: "", obsType };
+                    if (r.observation_id && r.ok && !r.requires_confirmation) {
+                        try {
+                            const ai = await ApiService.identifyObservationPlant(r.observation_id, "auto");
+                            row.predictions = Array.isArray(ai.predictions) ? ai.predictions : [];
+                            if (!row.predictions.length) row.predictionMessage = ai.result_summary?.message || "No prediction returned";
+                        } catch (aiErr) { row.predictionMessage = aiErr.message || "Prediction unavailable"; }
+                    } else if (r.requires_confirmation) row.predictionMessage = "Confirm GPS location before prediction";
+                    else if (r.status === "duplicate") row.predictionMessage = r.duplicate?.scientific_name ? `Existing record: ${r.duplicate.scientific_name}` : "Prediction unavailable for this upload";
+                    else row.predictionMessage = "Prediction unavailable for this upload";
+                    this.bulkReviewRows.push(row);
+                    completed++;
+                    prog.textContent = `Processed ${completed}/${imgs.length} photos; checking predictions…`;
+                }
+                this.renderBulkReviewRows();
             }
-            const res = { results: allResults, summary };
-            // Identify each saved observation independently; a failed prediction does not stop the batch.
-            const bulkRows = [];
-            for (let i = 0; i < (res.results || []).length; i++) {
-                const r = res.results[i];
-                let predictions = [];
-                let predictionMessage = "";
-                if (r.observation_id && r.ok && !r.requires_confirmation) {
-                    try {
-                        const ai = await ApiService.identifyObservationPlant(r.observation_id, "auto");
-                        predictions = Array.isArray(ai.predictions) ? ai.predictions : [];
-                        if (!predictions.length) predictionMessage = ai.result_summary?.message || "No prediction returned";
-                    } catch (aiErr) { predictionMessage = aiErr.message || "Prediction unavailable"; }
-                } else if (r.requires_confirmation) predictionMessage = "Confirm GPS location before prediction";
-                else predictionMessage = "Prediction unavailable for this upload";
-                bulkRows.push({ result: r, predictions, predictionMessage });
-                prog.textContent = `Processed ${i + 1}/${res.results.length} upload results; checking predictions…`;
+            const count = { ok: 0, needs_confirmation: 0, duplicates: 0, rejected: 0, errors: 0 };
+            for (const row of this.bulkReviewRows) {
+                const r = row.result || {};
+                if (r.ok) count.ok++;
+                else if (r.status === "duplicate") count.duplicates++;
+                else if (r.status === "rejected") count.rejected++;
+                else count.errors++;
+                if (r.requires_confirmation) count.needs_confirmation++;
             }
-            prog.textContent = `Done: ${res.summary.ok} ok · ${res.summary.needs_confirmation} need confirmation · ${res.summary.duplicates} duplicates · ${res.summary.rejected} rejected · ${res.summary.errors} errors.`;
-            const rows = bulkRows.map(({ result: r, predictions, predictionMessage }) => {
-                const badge = r.ok ? (r.requires_confirmation ? '<span class="pill pill-orange">needs GPS confirmation</span>' : '<span class="pill pill-green">saved</span>') :
-                    r.status === "duplicate" ? '<span class="pill pill-purple">duplicate</span>' :
-                    r.status === "no_gps" ? '<span class="pill pill-grey">no GPS</span>' :
-                    '<span class="pill pill-grey">' + this.esc(r.status || "error") + '</span>';
-                const msg = r.error || r.message || (r.observation_id ? `#${r.observation_id} · ${r.zone || ""}` : "");
-                const predictionHtml = predictions.length ? predictions.slice(0, 3).map(p => {
-                    const name = this.esc(p.scientific_name || p.name || "Unknown");
-                    const common = p.common_name ? ` <span class="muted">(${this.esc(p.common_name)})</span>` : "";
-                    const score = p.confidence_percentage || p.score || p.confidence || "";
-                    return `<div><i>${name}</i>${common}${score !== "" ? ` <span class="conf">${this.esc(String(score))}</span>` : ""}</div>`;
-                }).join("") : `<span class="muted">${this.esc(predictionMessage || "No prediction available")}</span>`;
-                const editAction = r.observation_id && r.ok && !r.requires_confirmation
-                    ? `<button type="button" class="btn-primary btn-small" style="white-space:nowrap" onclick="App.openObservationDetail(${Number(r.observation_id)})">✏️ Edit</button>`
-                    : `<span class="muted">${r.requires_confirmation ? "Confirm location first" : "—"}</span>`;
-                return `<tr><td>${this.esc(r.filename || "Photo")}</td><td>${badge}</td><td>${predictionHtml}</td><td class="muted">${this.esc(String(msg))}</td><td>${editAction}</td></tr>`;
-            }).join("");
-            document.getElementById("bulk-results").innerHTML = `
-                <table class="data-table" style="margin-top:0.75rem">
-                    <thead><tr><th>File</th><th>Result</th><th>Plant prediction</th><th>Note</th><th>Action</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-                <div style="display:flex;justify-content:flex-end;margin-top:0.75rem">
-                    <button class="btn-primary" onclick="App.closeBulkUploadModal(); App.loadObservations()">Done</button>
-                </div>
-            `;
+            prog.textContent = `Done: ${count.ok} ok · ${count.needs_confirmation} need confirmation · ${count.duplicates} duplicates · ${count.rejected} rejected · ${count.errors} errors.`;
         } catch (err) {
-            // Provide a useful diagnostic. "Failed to fetch" means the browser
-            // couldn't reach the server at all — most likely a CORS pre-flight
-            // failure, network issue, or the server returned a 413 before CORS
-            // headers were attached (request body exceeded hosting limit).
-            let msg = err.message || String(err);
-            if (msg.toLowerCase().includes("failed to fetch")) {
-                msg = (
-                    "Could not reach the server. Possible causes: " +
-                    "(1) Too many or too large photos — try fewer than 10 files at once; " +
-                    "(2) Network / CORS error — check the browser Console (F12) for details; " +
-                    "(3) Server is still starting — wait 30 seconds and retry."
-                );
-            } else if (msg.includes("413") || msg.toLowerCase().includes("too large")) {
-                msg = (
-                    "The batch is too large for the hosting provider. " +
-                    "Try uploading fewer photos per batch (e.g. 5–10 at a time)."
-                );
-            }
-            prog.textContent = `Bulk upload failed: ${msg}`;
             prog.style.color = "#f87171";
+            prog.textContent = `Bulk upload failed: ${err.message || String(err)}`;
+        } finally {
+            const input = document.getElementById("bulk-file-input");
+            if (input) input.value = "";
         }
     },
 
