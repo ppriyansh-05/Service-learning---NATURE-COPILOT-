@@ -835,3 +835,5 @@ Key Changes:
 - The dashboard screenshot showing “Loading…” appears to be the deployed version, while these fixes are on the unmerged feature branch. The queue fixes will not appear in production until the PR is reviewed, merged, and deployed.
 - Direct API submission is not implemented. iNaturalist write endpoints require authenticated authorization; no OAuth flow or user token storage has been added. Existing API read/import functionality is separate.
 - Verification: GitHub source inspection and edits only. No live API tests, automated tests, or deployment performed.
+
+- **Verification persistence follow-up:** RSWF verification now looks up the observation in the NGO-owned store first, preventing numeric ID collisions with iNaturalist reference rows. It saves verification via `save_ngo_observations_store()` so configured cloud state sync receives the verified status. Missing NGO records fail clearly rather than accidentally targeting a reference record.
