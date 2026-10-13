@@ -2778,10 +2778,13 @@ Status: ${c.status}`;
             // fetch only NGO-uploaded observations (source != iNaturalist)
             const all = await ApiService.getObservations({ source: "NGO / New Upload", limit: 200 });
             const records = Array.isArray(all) ? all : (all.data || all.observations || []);
-            const items = records.filter(o => o.source !== "iNaturalist");
+            // Only planted-tree uploads belong in this workflow. Sightings stay in Observations.
+            const items = records.filter(o =>
+                o.source !== "iNaturalist" && o.observation_type === "planted_rswf"
+            );
             this._inatQueue = items;
             if (!items.length) {
-                empty.innerHTML = `<div style="font-size:2.5rem;margin-bottom:0.5rem">🌿</div><div>No RSWF-uploaded observations found. Upload a field photo first, then verify its species in Observations. Verified NGO records will appear here for preparing iNaturalist drafts.</div>`;
+                empty.innerHTML = `<div style="font-size:2.5rem;margin-bottom:0.5rem">🌱</div><div>No RSWF planted-tree uploads found. Upload a tree photo and mark it as <strong>Planted by RSWF</strong>. After an NGO reviewer verifies its species, it will be selectable here for iNaturalist.</div>`;
                 return;
             }
             empty.style.display = "none";
@@ -2824,7 +2827,7 @@ Status: ${c.status}`;
             ? `<span class="pill pill-orange">⚠️ Needs review</span>`
             : `<span class="pill pill-grey">Pending verification</span>`;
         return `<tr id="inat-row-${i}">
-            <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" ${["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase()) ? "" : "disabled title=\"Verify the species before preparing an iNaturalist draft\""} onchange="App._updateInatSelectedCount()"></td>
+            <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" ${["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase()) ? "" : "disabled title=\"NGO verification is required before preparing an iNaturalist draft\""} onchange="App._updateInatSelectedCount()"></td>
             <td>${photo}</td>
             <td style="font-size:0.82rem">${this.esc(o.scientific_name || '—')}<br><span class="muted">${this.esc(o.common_name || '')}</span></td>
             <td>${typeLabel}</td>
@@ -2889,7 +2892,8 @@ Status: ${c.status}`;
         const ids = Array.from(checked).map(cb => cb.dataset.id);
         const items = (this._inatQueue || []).filter(o =>
             ids.includes(String(o.id)) &&
-            ["verified", "corrected", "confirmed"].includes(String(o.identification_status || o.verification_status || "").toLowerCase())
+            o.observation_type === "planted_rswf" &&
+            ["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase())
         );
         if (!items.length) {
             this.notify("Only species-verified observations can be prepared for iNaturalist. Verify the species first.", "warning", 7000);
@@ -2901,7 +2905,7 @@ Status: ${c.status}`;
             const params = new URLSearchParams({
                 taxon_name: o.scientific_name || "",
                 observed_on_string: o.observed_on || "",
-                description: o.notes || `Observed at Van Udyan, Bavdhan, Pune by RSWF. Zone: ${o.zone || 'unknown'}.`,
+                description: o.notes || `Tree planted by RSWF at Van Udyan, Bavdhan, Pune. NGO species verification completed. Zone: ${o.zone || 'unknown'}.`,
                 place_guess: "Bavdhan Van Udyan, Pune, Maharashtra, India",
                 latitude: o.latitude || "",
                 longitude: o.longitude || "",
@@ -2912,7 +2916,7 @@ Status: ${c.status}`;
 
         // Open iNaturalist tabs and show user a summary
         links.forEach(l => window.open(l.url, "_blank"));
-        this.notify(`🌿 Opened ${links.length} iNaturalist upload page${links.length > 1 ? 's' : ''} in new tabs. Fill in any remaining details and submit on iNaturalist.`, "success", 8000);
+        this.notify(`🌱 Opened ${links.length} verified planted-tree draft page${links.length > 1 ? 's' : ''} in new tabs. Sign in there, attach the tree photo, review the details, and press Submit on iNaturalist.`, "success", 8000);
     },
 
     // Keep old verification queue functions for backward compat (no longer shown in nav)
