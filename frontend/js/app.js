@@ -2588,19 +2588,22 @@ const App = {
                 <div class="kpi-card"><div class="kpi-label">Correct</div><div class="kpi-value">${s.correct || 0}</div><div class="kpi-subtext">right species, right cell</div></div>
                 <div class="kpi-card attention"><div class="kpi-label">Wrong / misplaced</div><div class="kpi-value">${(s.wrong_species || 0) + (s.misplaced_species || 0)}</div><div class="kpi-subtext">need review</div></div>
                 <div class="kpi-card"><div class="kpi-label">Outside plot</div><div class="kpi-value">${s.outside_plot || 0}</div><div class="kpi-subtext">GPS not inside the 1-acre grid</div></div>
+                <div class="kpi-card"><div class="kpi-label">Needs identification</div><div class="kpi-value">${s.needs_review || 0}</div><div class="kpi-subtext">species not verified yet</div></div>
             `;
 
             // Grid heatmap (SVG for crispness and tooltips)
             grid.innerHTML = this._renderPlanGrid(hmap.cells || []);
 
             // Mismatch table
-            const bad = (audit.rows || []).filter(r => r.status === "wrong_species" || r.status === "misplaced_species");
+            const bad = (audit.rows || []).filter(r => ["wrong_species", "misplaced_species", "needs_review"].includes(r.status));
             mCount.textContent = `${bad.length} issue${bad.length === 1 ? "" : "s"}`;
             if (!bad.length) {
                 mBody.innerHTML = `<tr class="empty-row"><td colspan="6">No mismatches — every planted record matches the plan.</td></tr>`;
             } else {
                 mBody.innerHTML = bad.map(r => {
-                    const statusPill = r.status === "wrong_species"
+                    const statusPill = r.status === "needs_review"
+                        ? `<span class="pill pill-red">needs identification</span>`
+                        : r.status === "wrong_species"
                         ? `<span class="pill pill-orange">wrong species</span>`
                         : `<span class="pill pill-blue">misplaced</span>`;
                     const should = r.rightful_cells_for_species && r.rightful_cells_for_species.length
@@ -2643,6 +2646,7 @@ const App = {
         const legend = (st) => ({
             correct: "#22C55E",
             wrong: "#F97316",
+            needs_review: "#EF4444",
             missing: "rgba(255,255,255,0.06)",
             non_plantable: "#64748B",
             void: "rgba(255,255,255,0.02)",
