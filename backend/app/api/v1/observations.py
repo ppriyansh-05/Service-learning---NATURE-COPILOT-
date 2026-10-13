@@ -236,6 +236,13 @@ async def inspect_photo_file(file: UploadFile = File(...)):
         return res
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except RuntimeError as e:
+        # OCR runtime failures are not the same as a photo with no location.
+        # Keep the message actionable so deployment problems are diagnosable.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e),
+        )
 
 @router.post("/{id}/identify")
 def identify_observation_plant(
