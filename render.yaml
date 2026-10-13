@@ -32,7 +32,7 @@ services:
       - key: MUTATION_RATE_LIMIT_PER_MINUTE
         value: "120"
       - key: MAX_REQUEST_BODY_BYTES
-        value: "16777216"
+        value: "115343360"
       # Database — point this at your Supabase connection string
       - key: DATABASE_URL
         sync: false
