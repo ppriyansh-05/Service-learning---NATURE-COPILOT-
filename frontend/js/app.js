@@ -3006,17 +3006,58 @@ Status: ${c.status}`;
         try {
             const res = await ApiService.bulkUploadPhotos(imgs, { obsType });
             prog.textContent = `Done: ${res.summary.ok} ok · ${res.summary.needs_confirmation} need confirmation · ${res.summary.duplicates} duplicates · ${res.summary.rejected} rejected · ${res.summary.errors} errors.`;
-            const rows = (res.results || []).map(r => {
+            // Run Pl@ntNet separately for each saved observation so predictions stay
+            // attached to the correct photo. Location-confirmation rows have no observation ID yet.
+            const bulkRows = [];
+            for (let i = 0; i < (res.results || []).length; i++) {
+                const r = res.results[i];
+                let predictions = [];
+                let predictionMessage = "";
+                if (r.observation_id && r.ok && !r.requires_confirmation) {
+                    try {
+                        const ai = await ApiService.identifyObservationPlant(r.observation_id, "auto");
+                        predictions = Array.isArray(ai.predictions) ? ai.predictions : [];
+                        if (!predictions.length) predictionMessage = ai.result_summary?.message || "No prediction returned";
+                    } catch (aiErr) {
+                        predictionMessage = aiErr.message || "Prediction unavailable";
+                    }
+                } else if (r.requires_confirmation) {
+                    predictionMessage = "Confirm GPS location before prediction";
+                } else {
+                    predictionMessage = "Prediction unavailable for this upload";
+                }
+                bulkRows.push({ result: r, predictions, predictionMessage });
+                prog.textContent = `Uploaded ${i + 1}/${(res.results || []).length}; checking plant predictions…`;
+            }
+
+            const rows = bulkRows.map(({ result: r, predictions, predictionMessage }) => {
                 const badge = r.ok ? (r.requires_confirmation ? '<span class="pill pill-orange">needs GPS confirmation</span>' : '<span class="pill pill-green">saved</span>') :
                     r.status === "duplicate" ? '<span class="pill pill-purple">duplicate</span>' :
                     r.status === "no_gps" ? '<span class="pill pill-grey">no GPS</span>' :
-                    '<span class="pill pill-grey">' + (r.status || "error") + '</span>';
+                    '<span class="pill pill-grey">' + this.esc(r.status || "error") + '</span>';
                 const msg = r.error || r.message || (r.observation_id ? `#${r.observation_id} · ${r.zone || ""}` : "");
-                return `<tr><td>${r.filename}</td><td>${badge}</td><td class="muted">${msg}</td></tr>`;
+                const predictionHtml = predictions.length
+                    ? predictions.slice(0, 3).map(p => {
+                        const name = this.esc(p.scientific_name || p.name || "Unknown");
+                        const common = p.common_name ? ` <span class="muted">(${this.esc(p.common_name)})</span>` : "";
+                        const score = p.confidence_percentage || p.score || p.confidence || "";
+                        return `<div><i>${name}</i>${common}${score !== "" ? ` <span class="conf">${this.esc(String(score))}</span>` : ""}</div>`;
+                    }).join("")
+                    : `<span class="muted">${this.esc(predictionMessage || "No prediction available")}</span>`;
+                const editAction = r.observation_id && r.ok && !r.requires_confirmation
+                    ? `<button type="button" class="btn-action" onclick="App.openObservationDetail(${Number(r.observation_id)})">Edit / Review</button>`
+                    : "";
+                return `<tr>
+                    <td>${this.esc(r.filename || "Photo")}</td>
+                    <td>${badge}</td>
+                    <td>${predictionHtml}</td>
+                    <td class="muted">${this.esc(String(msg))}${editAction ? `<div style="margin-top:0.4rem">${editAction}</div>` : ""}</td>
+                </tr>`;
             }).join("");
+            prog.textContent = `Done: ${res.summary.ok} ok · ${res.summary.needs_confirmation} need confirmation · ${res.summary.duplicates} duplicates · ${res.summary.rejected} rejected · ${res.summary.errors} errors.`;
             document.getElementById("bulk-results").innerHTML = `
                 <table class="data-table" style="margin-top:0.75rem">
-                    <thead><tr><th>File</th><th>Result</th><th>Note</th></tr></thead>
+                    <thead><tr><th>File</th><th>Result</th><th>Plant prediction</th><th>Note / actions</th></tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
                 <div style="display:flex;justify-content:flex-end;margin-top:0.75rem">
