@@ -598,7 +598,8 @@ class DataService:
                     "quality_grade": r.get("quality_grade"),
                     "zone": r.get("zone"),
                     "zone_status": r.get("zone_status", "OUTSIDE_ACTIVE_ZONES"),
-                    "photo_url": r.get("photo_url")
+                    "photo_url": r.get("photo_url"),
+                    "observation_type": r.get("observation_type", "sighted")
                 }
             })
             
