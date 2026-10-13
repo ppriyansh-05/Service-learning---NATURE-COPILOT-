@@ -874,3 +874,12 @@ Key Changes:
 - Saved NGO rows expose editable scientific/predicted name, common name, observation date, observer, notes, and record type (Sighted / Planted by RSWF). Saving a non-empty corrected scientific name also sends it through the existing human-verification workflow.
 - The NGO observation update schema/service now allow changing only the record type for NGO-owned records. This does not create/delete managed planted-plant records or alter monitoring history; iNaturalist reference records remain read-only.
 - Verification: source changes committed to this feature branch. No automated tests, browser runtime checks, live API tests, or Render deployment have been run. Rows awaiting GPS confirmation still require the existing confirmation workflow before record details can be saved; this is not claimed as verified.
+
+
+### Critical Fix — Prevent Production Data Loss on Redeploy (2026-10-14)
+- Root cause identified in code: NGO observations, planted plants, and monitoring visits are written to container-local JSON first; PostgreSQL sync was allowed to silently no-op when disabled or unreachable. Render free instances have ephemeral local disk, so redeploy/restart can make those records disappear. Photos also require configured Supabase Storage or a persistent volume.
+- Production state sync now defaults on unless explicitly disabled. Production startup fails closed if the PostgreSQL state-sync layer cannot initialize, rather than accepting data under a false assumption of durability.
+- Store writes now report a production error when PostgreSQL sync fails instead of silently claiming a durable save. A local recovery copy is retained where the filesystem permits.
+- Deployment configuration must still be verified: Render backend must have the correct DATABASE_URL, ENABLE_STATE_SYNC=true, SUPABASE_URL, SUPABASE_SERVICE_KEY and bucket configuration. The Render service must redeploy this branch/merged commit before behavior changes.
+- IMPORTANT: This code change does not recover records already lost or prove that the current production database contains all previously uploaded data. Before redeploy, export/backup current records and inspect app_state rows if access is available. Do not seed/overwrite an existing database blindly.
+- Verification status: source-level edits committed to feature branch; automated tests, live database connectivity, production deploy, persistence across restart, and photo persistence are not yet verified.

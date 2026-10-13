@@ -91,12 +91,20 @@ def _write_store(filename: str, records: Any, sync_key: str):
     store_path = os.path.join(store_dir, filename)
     with open(store_path, "w", encoding="utf-8") as f:
         json.dump(records, f, indent=2)
-    try:
-        from app.services import state_sync
-        state_sync.push(sync_key, records)
-    except Exception:
-        # Never let state sync failures block a user-visible write
-        pass
+    from app.services import state_sync
+    synced = state_sync.push(sync_key, records)
+    if settings_is_production() and not synced:
+        # Do not report success for data that only exists on ephemeral container disk.
+        # The local file is retained for recovery, but the API must fail visibly.
+        raise RuntimeError(
+            f"Durable save failed for {sync_key}. The local recovery copy was written, "
+            "but the production database sync failed; contact the administrator before retrying."
+        )
+
+
+def settings_is_production() -> bool:
+    from app.core.config import settings
+    return settings.IS_PRODUCTION
 
 def save_planted_plants_store(records: List[Dict[str, Any]]):
     _write_store("planted_plants_store.json", records, "planted_plants")
