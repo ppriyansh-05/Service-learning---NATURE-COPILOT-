@@ -173,6 +173,7 @@ class NGOObservationUpdate(BaseModel):
     observer: Optional[str] = Field(None, description="Observer name")
     notes: Optional[str] = Field(None, description="Observation notes")
     quality_grade: Optional[str] = Field(None, description="Quality grade")
+    observation_url: Optional[str] = Field(None, description="Submitted iNaturalist observation URL for RSWF uploads")
 
 class NGOObservationCreate(BaseModel):
     scientific_name: Optional[str] = Field(None, description="Species scientific name")
