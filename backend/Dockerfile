@@ -51,9 +51,9 @@ RUN groupadd --system --gid 1001 vanudyan \
  && useradd --system --uid 1001 --gid 1001 --home-dir /app --shell /usr/sbin/nologin vanudyan \
  && chown -R vanudyan:vanudyan /app/data/uploads /app/data/uploads_thumbs /app/logs \
  && chown vanudyan:vanudyan /app/data/processed \
- && find /app/data/processed -maxdepth 1 -type f \\
-      \( -name 'ngo_observations_store.json' -o -name 'planted_plants_store.json' \\
-      -o -name 'plant_monitoring_store.json' -o -name 'ai_predictions_store.json' \) \\
+ && find /app/data/processed -maxdepth 1 -type f \
+      \( -name 'ngo_observations_store.json' -o -name 'planted_plants_store.json' \
+      -o -name 'plant_monitoring_store.json' -o -name 'ai_predictions_store.json' \) \
       -exec chown vanudyan:vanudyan {} +
 USER vanudyan
 

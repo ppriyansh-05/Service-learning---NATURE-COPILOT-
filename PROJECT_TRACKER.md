@@ -801,3 +801,11 @@ Key Changes:
 - Data safety: no observations, planted-plant records, iNaturalist data, or stored photos were deleted or seeded. No test uploads were sent to production.
 - Verification status: Docker build, automated tests, deployment, and live upload verification have not yet been run in this environment. Do not mark this fix as deployed until Render builds the branch and the live upload is verified.
 - Related separate issue: bulk requests can exceed the configured 16 MiB request-body limit even when each photo is below the 10 MiB per-file limit. This is distinct from the confirmed filesystem permission failure and needs a separate bounded-batch fix / validation.
+
+---
+
+### Follow-up Fix — Dockerfile Line Continuations (2026-10-14)
+- The previous deployment of commit ee2a31f failed. Inspection of the committed backend/Dockerfile found doubled backslashes at the shell line-continuation points in the new `RUN ... find ...` block. Dockerfile continuation syntax requires one backslash at the end of each continued line; doubled backslashes can break parsing/execution of that block.
+- Prepared correction on branch `fix/dockerfile-line-continuations`: normalize the affected continuation points to one backslash per line. The change is limited to Dockerfile syntax.
+- Verification status: this environment has not run a Docker build. Deployment remains unverified until Render builds the corrected commit.
+- No production data was changed or test observations uploaded.
