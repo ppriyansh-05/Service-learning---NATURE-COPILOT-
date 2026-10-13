@@ -801,10 +801,11 @@ const App = {
                 const [lng, lat] = feat.geometry.coordinates;
                 const props = feat.properties;
                 const isNgo = props.source === "NGO / New Upload";
+                const isRswfPlanted = isNgo && props.observation_type === "planted_rswf";
 
                 const circleMarker = L.circleMarker([lat, lng], {
                     radius: isNgo ? 7 : 6,
-                    fillColor: isNgo ? "#f97316" : "#10b981",
+                    fillColor: isRswfPlanted ? "#ef4444" : (isNgo ? "#f97316" : "#10b981"),
                     color: "#ffffff",
                     weight: 1,
                     opacity: 1,
@@ -821,7 +822,7 @@ const App = {
                         ${popupRow("Observed", this.esc(props.observed_on))}
                         ${popupRow("Observer", this.esc(props.observer))}
                         ${popupRow("Zone", this.esc(props.zone || "Outside active zones"))}
-                        ${popupRow("Source", isNgo ? "RSWF field upload" : "iNaturalist")}
+                        ${popupRow("Source", isRswfPlanted ? "RSWF planted plant" : (isNgo ? "RSWF field upload" : "iNaturalist"))}
                         ${props.id ? `<div style="margin-top:6px"><button class="link-btn" onclick="App.openObservationDetail(${Number(props.id)})">View full details →</button></div>` : ""}
                     </div>
                 `;
