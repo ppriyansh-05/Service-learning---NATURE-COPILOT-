@@ -883,3 +883,10 @@ Key Changes:
 - Deployment configuration must still be verified: Render backend must have the correct DATABASE_URL, ENABLE_STATE_SYNC=true, SUPABASE_URL, SUPABASE_SERVICE_KEY and bucket configuration. The Render service must redeploy this branch/merged commit before behavior changes.
 - IMPORTANT: This code change does not recover records already lost or prove that the current production database contains all previously uploaded data. Before redeploy, export/backup current records and inspect app_state rows if access is available. Do not seed/overwrite an existing database blindly.
 - Verification status: source-level edits committed to feature branch; automated tests, live database connectivity, production deploy, persistence across restart, and photo persistence are not yet verified.
+
+
+### Follow-up — Larger Photo Uploads and Tighter Nearby-Duplicate Radius (2026-10-14)
+- Increased the per-photo upload limit from 10 MB to 50 MB in backend validation and bulk-upload frontend validation/message.
+- Raised the default request-body cap to 110 MiB and the Render blueprint value to 110 MiB to allow two 50 MB photos plus multipart overhead in a single bulk batch. Existing batches remain limited to two photos / about 10 MiB by the frontend batch planner, so this does not itself increase batch size; it permits larger individual photos when sent within a request.
+- Reduced the nearby same-plant duplicate radius from 1.0 m to 0.5 m and updated API descriptions and error text. Exact-photo duplicate detection remains unchanged.
+- Verification: source-level changes only; automated tests, runtime upload tests, and Render deployment have not been run from this environment. No production data or photos were changed.
