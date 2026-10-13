@@ -31,11 +31,14 @@ _enabled: Optional[bool] = None  # None = not probed yet; True/False = decided
 
 def _env_opt_in() -> bool:
     """
-    state_sync is opt-in — set ENABLE_STATE_SYNC=true in your deployment environment.
-    Default is OFF so local dev / tests never leak data into (or pull data from) the DB.
+    Keep local development/tests isolated, but default persistence ON in production.
+    ENABLE_STATE_SYNC=false can explicitly disable it; production startup will then fail
+    closed rather than accept writes that disappear on an ephemeral host.
     """
     v = os.environ.get("ENABLE_STATE_SYNC", "").strip().lower()
-    return v in ("1", "true", "yes", "on")
+    if v:
+        return v in ("1", "true", "yes", "on")
+    return settings.IS_PRODUCTION
 
 
 def _try_create_table() -> bool:
@@ -53,7 +56,7 @@ def _try_create_table() -> bool:
             """))
         return True
     except Exception as e:
-        log.info("state_sync: database unavailable, falling back to local JSON only (%s)", e)
+        log.error("state_sync: database unavailable; durable production persistence cannot be guaranteed (%s)", e)
         return False
 
 
@@ -113,7 +116,7 @@ def push(key: str, value: Any) -> bool:
             )
         return True
     except Exception as e:
-        log.warning("state_sync.push(%s) failed: %s", key, e)
+        log.error("state_sync.push(%s) failed: %s", key, e)
         return False
 
 
