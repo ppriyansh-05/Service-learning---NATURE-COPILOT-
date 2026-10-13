@@ -2781,7 +2781,7 @@ Status: ${c.status}`;
             const items = records.filter(o => o.source !== "iNaturalist");
             this._inatQueue = items;
             if (!items.length) {
-                empty.innerHTML = `<div style="font-size:2.5rem;margin-bottom:0.5rem">🌿</div><div>No RSWF-uploaded observations yet. Upload photos from the <b>Manage Plantations</b> tab and they will appear here.</div>`;
+                empty.innerHTML = `<div style="font-size:2.5rem;margin-bottom:0.5rem">🌿</div><div>No RSWF-uploaded observations found. Upload a field photo first, then verify its species in Observations. Verified NGO records will appear here for preparing iNaturalist drafts.</div>`;
                 return;
             }
             empty.style.display = "none";
@@ -2817,14 +2817,14 @@ Status: ${c.status}`;
         const typeLabel = o.observation_type === "planted_rswf"
             ? `<span class="pill pill-green">🌱 Planted</span>`
             : `<span class="pill pill-orange">👁️ Sighted</span>`;
-        const status = o.verification_status || "pending";
-        const statusBadge = status === "confirm" || status === "confirmed"
-            ? `<span class="pill pill-green">✅ Confirmed</span>`
+        const status = String(o.identification_status || o.verification_status || "pending").toLowerCase();
+        const statusBadge = ["verified", "corrected", "confirmed"].includes(status)
+            ? `<span class="pill pill-green">${status === "corrected" ? "Corrected & verified" : "Verified"}</span>`
             : status === "needs_review"
             ? `<span class="pill pill-orange">⚠️ Needs review</span>`
-            : `<span class="pill pill-grey">${status}</span>`;
+            : `<span class="pill pill-grey">Pending verification</span>`;
         return `<tr id="inat-row-${i}">
-            <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" onchange="App._updateInatSelectedCount()"></td>
+            <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" ${["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase()) ? "" : "disabled title=\"Verify the species before preparing an iNaturalist draft\""} onchange="App._updateInatSelectedCount()"></td>
             <td>${photo}</td>
             <td style="font-size:0.82rem">${this.esc(o.scientific_name || '—')}<br><span class="muted">${this.esc(o.common_name || '')}</span></td>
             <td>${typeLabel}</td>
@@ -2887,9 +2887,16 @@ Status: ${c.status}`;
         const checked = document.querySelectorAll(".inat-select-cb:checked");
         if (!checked.length) { this.notify("Select at least one observation first.", "warning"); return; }
         const ids = Array.from(checked).map(cb => cb.dataset.id);
-        const items = (this._inatQueue || []).filter(o => ids.includes(String(o.id)));
+        const items = (this._inatQueue || []).filter(o =>
+            ids.includes(String(o.id)) &&
+            ["verified", "corrected", "confirmed"].includes(String(o.identification_status || o.verification_status || "").toLowerCase())
+        );
+        if (!items.length) {
+            this.notify("Only species-verified observations can be prepared for iNaturalist. Verify the species first.", "warning", 7000);
+            return;
+        }
 
-        // Build iNaturalist create-observation URLs for each item
+        // Prepare iNaturalist draft pages; the user must review and submit on iNaturalist.
         const links = items.map(o => {
             const params = new URLSearchParams({
                 taxon_name: o.scientific_name || "",
