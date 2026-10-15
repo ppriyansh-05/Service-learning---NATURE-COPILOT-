@@ -186,6 +186,29 @@ def _save_token_record(record: dict[str, Any], account_id: str) -> None:
         raise RuntimeError("Could not persist the iNaturalist connection to durable database storage.")
 
 
+def _delete_token_record(account_id: str) -> None:
+    """Remove the encrypted OAuth token from durable storage and the local fallback."""
+    store_key = _account_store_key(account_id)
+    store_path = _account_store_path(account_id)
+    if state_sync.is_enabled():
+        try:
+            from sqlalchemy import text
+            from app.db.session import engine
+            with engine.begin() as conn:
+                conn.execute(text("DELETE FROM app_state WHERE key = :k"), {"k": store_key})
+        except Exception as exc:
+            log.error("Could not remove iNaturalist OAuth state from durable storage: %s", exc)
+            if settings.IS_PRODUCTION:
+                raise RuntimeError("Could not securely sign out: durable token storage could not be cleared.") from exc
+    elif settings.IS_PRODUCTION:
+        raise RuntimeError("Could not securely sign out: durable token storage is unavailable.")
+    try:
+        store_path.unlink(missing_ok=True)
+    except OSError as exc:
+        log.error("Could not remove local iNaturalist OAuth fallback file: %s", exc)
+        raise RuntimeError("Could not securely sign out: the local token file could not be removed.") from exc
+
+
 def _update_record(record_id: int, changes: dict[str, Any]) -> dict[str, Any]:
     records = load_ngo_observations_store()
     record = next((item for item in records if int(item.get("id", -1)) == record_id), None)
@@ -316,6 +339,17 @@ def inaturalist_status(account_id: str | None = Header(None, alias="X-INAT-Accou
         "username": record.get("username") if record else None,
         "account_required": not bool(valid_account_id),
     }
+
+
+@router.post("/disconnect")
+def disconnect_inaturalist(account_id: str | None = Header(None, alias="X-INAT-Account-ID")):
+    """Sign out this browser by deleting its encrypted token from durable storage."""
+    account_id = _validate_account_id(account_id)
+    try:
+        _delete_token_record(account_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"disconnected": True}
 
 
 @router.post("/connect")
