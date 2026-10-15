@@ -253,20 +253,34 @@ def _resolve_taxon_id(access_token: str, scientific_name: str) -> int:
 
 @router.get("/status")
 def inaturalist_status():
-    configured = bool(
-        settings.INATURALIST_CLIENT_ID
-        and settings.INATURALIST_CLIENT_SECRET
-        and settings.INATURALIST_TOKEN_ENCRYPTION_KEY
-        and settings.FRONTEND_PUBLIC_URL
-        and (settings.INATURALIST_REDIRECT_URI or settings.BACKEND_PUBLIC_URL)
-    )
+    # Report only the names of missing settings, never their values. This makes
+    # the disabled Connect button actionable instead of showing a generic error.
+    missing = []
+    if not settings.INATURALIST_CLIENT_ID:
+        missing.append("INATURALIST_CLIENT_ID")
+    if not settings.INATURALIST_CLIENT_SECRET:
+        missing.append("INATURALIST_CLIENT_SECRET")
+    if not settings.INATURALIST_TOKEN_ENCRYPTION_KEY:
+        missing.append("INATURALIST_TOKEN_ENCRYPTION_KEY")
+    if not settings.FRONTEND_PUBLIC_URL:
+        missing.append("FRONTEND_PUBLIC_URL")
+    if not (settings.INATURALIST_REDIRECT_URI or settings.BACKEND_PUBLIC_URL):
+        missing.append("INATURALIST_REDIRECT_URI (or BACKEND_PUBLIC_URL)")
+    if not missing:
+        try:
+            _fernet()
+        except RuntimeError:
+            missing.append("INATURALIST_TOKEN_ENCRYPTION_KEY (must be a valid Fernet key)")
+
     try:
-        record = _load_token_record()
+        record = _load_token_record() if not missing else None
     except Exception:
         log.exception("Failed to load iNaturalist connection state.")
         record = None
+        missing.append("durable token storage (check backend logs and Postgres app_state)")
     return {
-        "configured": configured,
+        "configured": not missing,
+        "missing_configuration": missing,
         "connected": bool(record),
         "username": record.get("username") if record else None,
     }
