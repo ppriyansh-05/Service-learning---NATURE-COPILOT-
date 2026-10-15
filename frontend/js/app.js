@@ -2789,8 +2789,11 @@ Status: ${c.status}`;
             const connection = await ApiService.getInaturalistStatus();
             this.updateInatConnectionUI(connection);
             // Only RSWF-owned planted-tree records belong in this workflow.
-            const all = await ApiService.getObservations({ source: "NGO / New Upload", limit: 200 });
-            const records = Array.isArray(all) ? all : (all.data || all.observations || []);
+            // The API caps a page at 200 records. Fetch all pages so older planted
+            // records are not silently missing from the upload queue.
+            const records = await this.fetchAllPages(
+                (params) => ApiService.getObservations({ ...params, source: "NGO / New Upload" })
+            );
             const items = records.filter(o =>
                 o.source !== "iNaturalist" && o.observation_type === "planted_rswf"
             );
