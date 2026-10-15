@@ -2842,7 +2842,7 @@ Status: ${c.status}`;
                 ? `Authorized account: ${connection.username || "iNaturalist"}. Publishing still requires NGO approval.`
                 : (connection && connection.configured
                     ? "Connect the authorized NGO iNaturalist account to enable the approval and upload step."
-                    : "Backend setup is required: configure the iNaturalist OAuth app, redirect URL, frontend URL and encryption key on Render.");
+                    : `Backend setup is required. Missing/invalid settings: ${(connection && connection.missing_configuration || []).join(", ") || "check the backend logs"}.`);
         }
         if (button) {
             button.textContent = this._inatConnected ? "↻ Reconnect iNaturalist" : "🔗 Connect iNaturalist";
