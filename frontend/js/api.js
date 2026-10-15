@@ -215,6 +215,17 @@ class ApiService {
         });
     }
 
+    static async disconnectInaturalist() {
+        const accountId = this.getInaturalistAccountId();
+        const result = await this.fetchJson(window.APP_CONFIG.getEndpoint("/inaturalist/disconnect"), {
+            method: "POST",
+            headers: { "X-INAT-Account-ID": accountId }
+        });
+        // Drop the browser selector only after the backend confirms deletion.
+        try { window.localStorage.removeItem("nature_copilot_inaturalist_account_id"); } catch (_) {}
+        return result;
+    }
+
     static getObservationById(id) {
         return this.fetchJson(window.APP_CONFIG.getEndpoint(`/observations/${id}`));
     }

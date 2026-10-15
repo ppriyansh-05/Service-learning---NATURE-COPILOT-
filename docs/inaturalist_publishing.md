@@ -8,8 +8,10 @@ Nature Copilot's iNaturalist Upload section now supports this workflow:
 4. The user selects eligible RSWF planted-tree records and reviews the photo, species, date and GPS preview.
 5. After the NGO administrator enters the existing admin password and confirms **Approve & Upload**, the backend rechecks eligibility and submits the observation and stored photo under that browser's connected iNaturalist account.
 6. Nature Copilot saves the iNaturalist URL/ID and publishing status in the NGO observation store. Duplicate submissions are blocked.
-7. When dashboard data is loaded, an imported iNaturalist row is hidden from dashboard counts/lists only when its explicit iNaturalist observation ID matches a linked NGO planted-tree record. The source CSV, NGO record and remote iNaturalist observation are not deleted.
-8. For a linked/published record, **Edit on iNaturalist** opens that observation's edit page in a new tab. Edits there are made on iNaturalist; they do not overwrite the NGO's original planted-tree register or monitoring history.
+7. After publishing, the user clicks **Sign out & clear session**. Nature Copilot deletes that browser's encrypted OAuth token from the Postgres `app_state` row and local fallback token file, removes the browser's account selector, and clears the NGO admin password from session storage. If token deletion fails, the UI reports the error instead of claiming sign-out succeeded.
+8. Signing out does not delete the saved NGO observation, published iNaturalist observation, photo, or monitoring history. It also does not revoke Nature Copilot's authorization inside iNaturalist itself; for that, the user must manage connected apps in iNaturalist account settings.
+9. When dashboard data is loaded, an imported iNaturalist row is hidden from dashboard counts/lists only when its explicit iNaturalist observation ID matches a linked NGO planted-tree record. The source CSV, NGO record and remote iNaturalist observation are not deleted.
+10. For a linked/published record, **Edit on iNaturalist** opens that observation's edit page in a new tab. Edits there are made on iNaturalist; they do not overwrite the NGO's original planted-tree register or monitoring history.
 
 Only NGO-owned records marked `planted_rswf` with `identification_status` of `verified` or `corrected` can be published. Public iNaturalist reference records and ordinary sightings are excluded. The browser never receives the OAuth client secret or access token.
 
@@ -65,3 +67,4 @@ The OAuth token is encrypted before it is saved. In production the encrypted con
 - `POST /api/v1/inaturalist/connect` — starts OAuth for the browser account ID in `X-INAT-Account-ID`; publishing remains NGO-admin-protected.
 - `GET /api/v1/inaturalist/oauth/callback` — OAuth callback.
 - `POST /api/v1/inaturalist/publish/{observation_id}` — NGO-admin-protected, approval-triggered publication.
+- `POST /api/v1/inaturalist/disconnect` — deletes the current browser's stored OAuth token and signs out.

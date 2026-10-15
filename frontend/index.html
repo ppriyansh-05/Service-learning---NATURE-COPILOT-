@@ -409,7 +409,8 @@
                     <p>Connect an authorized iNaturalist account, review verified RSWF planted-tree records, and approve each publication. Nature Copilot uploads the photo and observation only after approval.</p>
                 </div>
                 <div class="section-actions">
-                    <button class="btn-primary" id="btn-connect-inat" onclick="App.connectInaturalist()">🔗 Connect iNaturalist</button>
+                    <button class="btn-primary" id="btn-connect-inat" onclick="App.connectInaturalist()">🔗 Sign in to iNaturalist</button>
+                    <button class="btn-action" id="btn-signout-inat" onclick="App.signOutInaturalist()" style="display:none">Sign out &amp; clear session</button>
                     <button class="btn-primary" onclick="App.loadInatUploadQueue()">↻ Refresh</button>
                     <button class="btn-primary btn-blue" id="btn-review-inat" onclick="App.reviewSelectedForInat()" style="display:none">Review Selected</button>
                 </div>
@@ -423,7 +424,7 @@
             </div>
 
             <div class="note-card" style="margin-top:0;margin-bottom:1rem">
-                <strong>Publishing rules:</strong> only NGO-owned records marked <strong>Planted by RSWF</strong> with a verified or corrected species can be submitted. The app checks the date, GPS, stored photo and duplicate status. Selecting a row does not publish it; review the preview and click <strong>Approve &amp; Upload</strong> to send it to iNaturalist.
+                <strong>Publishing flow:</strong> first save the field photo/record in Nature Copilot using the NGO password. Once an NGO reviewer verifies or corrects its species, an eligible <strong>Planted by RSWF</strong> record appears here. Select it, review the photo/species/date/GPS, sign in to iNaturalist, enter the NGO password when prompted, then click <strong>Approve &amp; Upload</strong>. When finished, click <strong>Sign out &amp; clear session</strong> to remove the stored iNaturalist token and clear the NGO admin session from this browser.
                 <p style="margin-bottom:0.25rem"><strong>Duplicate protection:</strong> after a record is linked to its iNaturalist observation ID, the dashboard hides only that matching imported iNaturalist copy. The original NGO planted-tree record and monitoring history are retained.</p>
                 <p style="margin-bottom:0"><strong>Editing after upload:</strong> use <em>Edit on iNaturalist</em> in the row actions to edit the published observation on iNaturalist. This opens iNaturalist in a new tab; changes made there do not overwrite the original NGO register.</p>
             </div>
@@ -1181,8 +1182,8 @@
 
 <!-- Frontend JavaScript Modules -->
 <script src="js/config.js?v=v2026.10.13-2"></script>
-<script src="js/api.js?v=v2026.10.15-inat-per-user"></script>
-<script src="js/app.js?v=v2026.10.15-inat-per-user"></script>
+<script src="js/api.js?v=v2026.10.15-inat-signout"></script>
+<script src="js/app.js?v=v2026.10.15-inat-signout"></script>
 
 </body>
 </html>
