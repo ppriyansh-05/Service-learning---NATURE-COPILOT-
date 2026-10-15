@@ -2857,6 +2857,8 @@ Status: ${c.status}`;
         const verified = ["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase());
         const uploadState = String(o.inaturalist_upload_status || "").toLowerCase();
         const hasRemoteRecord = Boolean(o.observation_url || o.inaturalist_observation_id);
+        const remoteId = String(o.inaturalist_observation_id || ((o.observation_url || "").match(/\\/observations\\/(\\d+)/) || [])[1] || "");
+        const editUrl = /^\\d+$/.test(remoteId) ? `https://www.inaturalist.org/observations/${remoteId}/edit` : "";
         const uploaded = uploadState === "published" || (hasRemoteRecord && uploadState !== "photo_failed");
         const statusBadge = uploaded
             ? `<span class="pill pill-green">✓ Published to iNaturalist</span>`
@@ -2888,6 +2890,7 @@ Status: ${c.status}`;
             <td>
                 <button class="btn-action" style="font-size:0.78rem" onclick="App.openObservationDetail(${Number(o.id)})">View</button>
                 ${o.observation_url ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${this.esc(o.observation_url)}" target="_blank" rel="noopener">View iNaturalist record ↗</a>` : `<button class="btn-action" style="font-size:0.78rem" onclick="App.linkInaturalistRecord(${Number(o.id)})">Link existing record</button>`}
+                ${editUrl ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${editUrl}" target="_blank" rel="noopener" title="Edit the published observation on iNaturalist. The original NGO register remains unchanged.">Edit on iNaturalist ↗</a>` : ""}
                 ${!verified && !uploaded ? `<button class="btn-primary" style="font-size:0.78rem;padding:0.25rem 0.6rem" onclick="App._inatQuickConfirm(${i})">Confirm</button>` : ""}
             </td>
         </tr>`;
