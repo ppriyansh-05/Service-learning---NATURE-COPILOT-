@@ -179,9 +179,13 @@ def _eligible_record(record_id: int) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="Only RSWF planted-tree records can be published.")
     if str(record.get("identification_status", "")).lower() not in {"verified", "corrected"}:
         raise HTTPException(status_code=400, detail="Verify or correct the species with an NGO reviewer before publishing.")
-    if record.get("observation_url") or record.get("inaturalist_observation_id"):
-        raise HTTPException(status_code=409, detail="This record is already linked to an iNaturalist observation.")
-    if str(record.get("inaturalist_upload_status", "")).lower() == "publishing":
+    upload_state = str(record.get("inaturalist_upload_status", "")).lower()
+    remote_id = record.get("inaturalist_observation_id")
+    # A remote observation with a failed photo upload can be retried safely by
+    # attaching the photo to the same remote ID, never by creating a duplicate.
+    if (record.get("observation_url") or remote_id) and not (remote_id and upload_state == "photo_failed"):
+        raise HTTPException(status_code=409, detail="This record is already published or is being published.")
+    if upload_state in {"publishing", "photo_uploading"}:
         raise HTTPException(status_code=409, detail="This record is already being published.")
     if not record.get("scientific_name"):
         raise HTTPException(status_code=400, detail="A verified scientific name is required.")
@@ -329,60 +333,91 @@ def publish_observation(
     photo_bytes = record.pop("_publish_photo_bytes")
     latitude = record.pop("_publish_latitude")
     longitude = record.pop("_publish_longitude")
+    access_token = token_record["access_token"]
+    remote_id = record.get("inaturalist_observation_id")
+    upload_state = str(record.get("inaturalist_upload_status", "")).lower()
 
     # Persist a lock before contacting iNaturalist, reducing accidental duplicate
     # submissions from double-clicks or concurrent requests.
     _update_record(observation_id, {
-        "inaturalist_upload_status": "publishing",
+        "inaturalist_upload_status": "publishing" if not (remote_id and upload_state == "photo_failed") else "photo_uploading",
         "inaturalist_upload_error": None,
     })
     try:
-        access_token = token_record["access_token"]
-        taxon_id = _resolve_taxon_id(access_token, str(record["scientific_name"]).strip())
-        photo_ext = os.path.splitext(photo_name)[1].lower()
-        mime = {"jpg": "image/jpeg", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}.get(photo_ext, "image/jpeg")
-        description = str(record.get("notes") or "").strip()
-        provenance = "Planted by RSWF at Van Udyan, Bavdhan, Pune. Species identification verified by an NGO reviewer."
-        if record.get("zone"):
-            provenance += f" Monitoring zone: {record['zone']}."
-        if description:
-            description = description + "\n\n" + provenance
-        else:
-            description = provenance
-        form_data = {
-            "observation[taxon_id]": str(taxon_id),
-            "observation[species_guess]": str(record["scientific_name"]).strip(),
-            "observation[observed_on_string]": str(record["observed_on"])[:10],
-            "observation[time_zone]": "Asia/Kolkata",
-            "observation[latitude]": str(latitude),
-            "observation[longitude]": str(longitude),
-            "observation[location_is_exact]": "true",
-            "observation[place_guess]": "Bavdhan Van Udyan, Pune, Maharashtra, India",
-            "observation[description]": description,
-            "observation[tag_list]": "Van Udyan, RSWF, Bavdhan, Pune",
-        }
-        response = requests.post(
-            f"{INAT_SITE}/observations.json",
-            data=form_data,
-            files={"observation[photos_attributes][0][file]": (photo_name, photo_bytes, mime)},
-            headers={"Authorization": f"Bearer {access_token}"},
-            timeout=60,
-        )
-        if response.status_code >= 400:
-            log.warning("iNaturalist observation creation failed (status=%s, response_length=%s)", response.status_code, len(response.content or b""))
-            raise RuntimeError(f"iNaturalist rejected the observation (HTTP {response.status_code}). Check the account, species and photo, then reconnect or retry.")
-        payload = response.json()
-        if isinstance(payload, list):
-            payload = payload[0] if payload else {}
-        if isinstance(payload, dict) and isinstance(payload.get("results"), list):
-            payload = payload["results"][0] if payload["results"] else {}
-        remote_id = payload.get("id") if isinstance(payload, dict) else None
         if not remote_id:
-            raise RuntimeError("iNaturalist returned no observation ID; check your iNaturalist account before retrying.")
-        url = f"{INAT_SITE}/observations/{int(remote_id)}"
+            taxon_id = _resolve_taxon_id(access_token, str(record["scientific_name"]).strip())
+            description = str(record.get("notes") or "").strip()
+            provenance = "Planted by RSWF at Van Udyan, Bavdhan, Pune. Species identification verified by an NGO reviewer."
+            if record.get("zone"):
+                provenance += f" Monitoring zone: {record['zone']}."
+            if description:
+                description = description + "\\n\\n" + provenance
+            else:
+                description = provenance
+            form_data = {
+                "observation[taxon_id]": str(taxon_id),
+                "observation[species_guess]": str(record["scientific_name"]).strip(),
+                "observation[observed_on_string]": str(record["observed_on"])[:10],
+                "observation[time_zone]": "Asia/Kolkata",
+                "observation[latitude]": str(latitude),
+                "observation[longitude]": str(longitude),
+                "observation[location_is_exact]": "true",
+                "observation[place_guess]": "Bavdhan Van Udyan, Pune, Maharashtra, India",
+                "observation[description]": description,
+                "observation[tag_list]": "Van Udyan, RSWF, Bavdhan, Pune",
+            }
+            response = requests.post(
+                f"{INAT_SITE}/observations.json",
+                data=form_data,
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=60,
+            )
+            if response.status_code >= 400:
+                log.warning("iNaturalist observation creation failed (status=%s, response_length=%s)", response.status_code, len(response.content or b""))
+                raise RuntimeError(f"iNaturalist rejected the observation (HTTP {response.status_code}). Check the account, species and metadata, then retry.")
+            payload = response.json()
+            if isinstance(payload, list):
+                payload = payload[0] if payload else {}
+            if isinstance(payload, dict) and isinstance(payload.get("results"), list):
+                payload = payload["results"][0] if payload["results"] else {}
+            remote_id = payload.get("id") if isinstance(payload, dict) else None
+            if not remote_id:
+                raise RuntimeError("iNaturalist returned no observation ID; check your iNaturalist account before retrying.")
+            remote_id = int(remote_id)
+            url = f"{INAT_SITE}/observations/{remote_id}"
+            # Save the remote ID before photo upload. If the photo upload fails,
+            # a retry attaches the photo to this same observation instead of duplicating it.
+            _update_record(observation_id, {
+                "observation_url": url,
+                "inaturalist_observation_id": remote_id,
+                "inaturalist_upload_status": "photo_uploading",
+                "inaturalist_upload_error": None,
+            })
+        else:
+            remote_id = int(remote_id)
+            url = str(record.get("observation_url") or f"{INAT_SITE}/observations/{remote_id}")
+            _update_record(observation_id, {
+                "observation_url": url,
+                "inaturalist_observation_id": remote_id,
+                "inaturalist_upload_status": "photo_uploading",
+                "inaturalist_upload_error": None,
+            })
+
+        photo_ext = os.path.splitext(photo_name)[1].lower()
+        mime = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}.get(photo_ext, "image/jpeg")
+        photo_response = requests.post(
+            f"{INAT_SITE}/observation_photos.json",
+            data={"observation_photo[observation_id]": str(remote_id)},
+            files={"file": (photo_name, photo_bytes, mime)},
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=90,
+        )
+        if photo_response.status_code >= 400:
+            log.warning("iNaturalist photo upload failed (status=%s, response_length=%s)", photo_response.status_code, len(photo_response.content or b""))
+            raise RuntimeError(f"The observation was created, but iNaturalist rejected the photo (HTTP {photo_response.status_code}). Retry to attach the photo to the same record.")
         _update_record(observation_id, {
             "observation_url": url,
-            "inaturalist_observation_id": int(remote_id),
+            "inaturalist_observation_id": remote_id,
             "inaturalist_upload_status": "published",
             "inaturalist_uploaded_at": datetime.now(timezone.utc).isoformat(),
             "inaturalist_upload_error": None,
@@ -390,7 +425,7 @@ def publish_observation(
         return {
             "success": True,
             "observation_id": observation_id,
-            "inaturalist_observation_id": int(remote_id),
+            "inaturalist_observation_id": remote_id,
             "observation_url": url,
             "status": "published",
         }
@@ -399,8 +434,16 @@ def publish_observation(
     except Exception as exc:
         log.exception("Publishing RSWF observation %s to iNaturalist failed.", observation_id)
         try:
+            # Keep the remote ID if the observation was created; this enables a
+            # safe photo-only retry and prevents a duplicate remote observation.
+            current_records = load_ngo_observations_store()
+            current = next((item for item in current_records if int(item.get("id", -1)) == observation_id), None)
+            if current and current.get("inaturalist_observation_id"):
+                failure_status = "photo_failed"
+            else:
+                failure_status = "failed"
             _update_record(observation_id, {
-                "inaturalist_upload_status": "failed",
+                "inaturalist_upload_status": failure_status,
                 "inaturalist_upload_error": str(exc)[:300],
             })
         except Exception:
