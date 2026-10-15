@@ -2895,13 +2895,15 @@ Status: ${c.status}`;
         const el = document.getElementById("inat-selected-count");
         if (el) el.textContent = `${cbs.length} selected`;
         const allCb = document.getElementById("inat-select-all");
-        const totalCbs = document.querySelectorAll(".inat-select-cb");
+        const totalCbs = document.querySelectorAll(".inat-select-cb:not(:disabled)");
         if (allCb) allCb.indeterminate = cbs.length > 0 && cbs.length < totalCbs.length;
-        if (allCb && cbs.length === totalCbs.length && totalCbs.length > 0) allCb.checked = true;
+        if (allCb) allCb.checked = totalCbs.length > 0 && cbs.length === totalCbs.length;
+        const reviewBtn = document.getElementById("btn-review-inat");
+        if (reviewBtn) reviewBtn.style.display = cbs.length > 0 ? "inline-block" : "none";
     },
 
     inatToggleSelectAll(checked) {
-        document.querySelectorAll(".inat-select-cb").forEach(cb => cb.checked = checked);
+        document.querySelectorAll(".inat-select-cb:not(:disabled)").forEach(cb => cb.checked = checked);
         this._updateInatSelectedCount();
     },
 
@@ -2935,14 +2937,20 @@ Status: ${c.status}`;
     },
 
     async connectInaturalist() {
+        if (!ApiService.getNgoPassword()) {
+            this.openAuthModal(() => this.connectInaturalist());
+            return;
+        }
         try {
             const status = await ApiService.getInaturalistStatus();
             this.updateInatConnectionUI(status);
             if (!status.configured) {
-                this.notify("iNaturalist OAuth is not configured on the backend yet. See the feature setup notes.", "warning", 8000);
+                this.notify("iNaturalist OAuth is not configured on the backend yet. See docs/inaturalist_publishing.md and add the required Render environment variables.", "warning", 9000);
                 return;
             }
-            window.location.href = window.APP_CONFIG.getEndpoint("/inaturalist/connect");
+            const result = await ApiService.startInaturalistConnection();
+            if (!result || !result.authorization_url) throw new Error("The backend did not return an iNaturalist authorization URL.");
+            window.location.href = result.authorization_url;
         } catch (e) {
             this.notify(`Could not start iNaturalist sign-in: ${e.message}`, "error", 7000);
         }
