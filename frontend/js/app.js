@@ -58,7 +58,7 @@ const App = {
                 this.showErrorBanner(`Could not load the overview: ${err.message}`);
             }
         }
-        if (inatCallbackState === "connected") this.notify("iNaturalist account connected. Select verified planted-tree records to review and approve.", "success", 7000);
+        if (inatCallbackState === "connected") this.notify("Your iNaturalist account is connected. Select verified planted-tree records to review and approve.", "success", 7000);
         else if (inatCallbackState === "error") this.notify("iNaturalist connection failed. Check backend OAuth configuration and try again.", "error", 8000);
         else if (inatCallbackState === "cancelled") this.notify("iNaturalist connection was cancelled.", "warning");
     },
@@ -2839,15 +2839,15 @@ Status: ${c.status}`;
         }
         if (status) {
             status.textContent = this._inatConnected
-                ? `Authorized account: ${connection.username || "iNaturalist"}. Publishing still requires NGO approval.`
+                ? `Your iNaturalist account: ${connection.username || "connected"}. NGO approval is still required before publishing.`
                 : (connection && connection.configured
-                    ? "Connect the authorized NGO iNaturalist account to enable the approval and upload step."
+                    ? "Connect your own iNaturalist account. After sign-in, select verified records and request approval to publish."
                     : `Backend setup is required. Missing/invalid settings: ${(connection && connection.missing_configuration || []).join(", ") || "check the backend logs"}.`);
         }
         if (button) {
-            button.textContent = this._inatConnected ? "↻ Reconnect iNaturalist" : "🔗 Connect iNaturalist";
+            button.textContent = this._inatConnected ? "↻ Switch iNaturalist account" : "🔗 Sign in to iNaturalist";
             button.disabled = !(connection && connection.configured);
-            button.title = button.disabled ? "iNaturalist OAuth environment settings are missing on the backend." : "Authorize Nature Copilot using iNaturalist's official sign-in page.";
+            button.title = button.disabled ? "iNaturalist OAuth environment settings are missing on the backend." : "Sign in with your iNaturalist account. Publishing still requires NGO approval.";
         }
     },
 
@@ -2946,10 +2946,8 @@ Status: ${c.status}`;
     },
 
     async connectInaturalist() {
-        if (!ApiService.getNgoPassword()) {
-            this.openAuthModal(() => this.connectInaturalist());
-            return;
-        }
+        // OAuth connection belongs to the current browser/user and does not
+        // mutate NGO records. The separate NGO admin check remains on publish.
         try {
             const status = await ApiService.getInaturalistStatus();
             this.updateInatConnectionUI(status);
