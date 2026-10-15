@@ -2,6 +2,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.v1 import inaturalist
+from app.services import data_service
 from app.services.data_service import exclude_linked_inaturalist_observations
 
 
@@ -104,3 +105,18 @@ def test_dashboard_hides_only_iNaturalist_rows_explicitly_linked_to_ngo_records(
 
     assert [row.get("source_id") for row in visible if row.get("source") == "iNaturalist"] == ["99999"]
     assert any(row.get("id") == 17 and row.get("source") == "NGO / New Upload" for row in visible)
+
+
+
+def test_dashboard_deduplication_also_honours_link_on_managed_planted_plant(monkeypatch):
+    monkeypatch.setattr(data_service, "load_planted_plants_store", lambda: [
+        {"plant_code": "RSWF-PLANT-1", "inaturalist_observation_id": 777}
+    ])
+    rows = [
+        {"id": 11, "source": "iNaturalist", "source_id": "777"},
+        {"id": 12, "source": "iNaturalist", "source_id": "778"},
+    ]
+
+    visible = exclude_linked_inaturalist_observations(rows, [])
+
+    assert [row["source_id"] for row in visible] == ["778"]
