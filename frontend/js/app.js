@@ -2833,6 +2833,8 @@ Status: ${c.status}`;
         const indicator = document.getElementById("inat-connection-indicator");
         const status = document.getElementById("inat-connection-status");
         const button = document.getElementById("btn-connect-inat");
+        const signOutButton = document.getElementById("btn-signout-inat");
+        if (signOutButton) signOutButton.style.display = this._inatConnected ? "inline-flex" : "none";
         if (indicator) {
             indicator.className = this._inatConnected ? "pill pill-green" : "pill pill-grey";
             indicator.textContent = this._inatConnected ? "✓ Connected" : (connection && connection.configured ? "Not connected" : "Setup required");
@@ -2960,6 +2962,26 @@ Status: ${c.status}`;
             window.location.href = result.authorization_url;
         } catch (e) {
             this.notify(`Could not start iNaturalist sign-in: ${e.message}`, "error", 7000);
+        }
+    },
+
+    async signOutInaturalist() {
+        const confirmed = window.confirm("Sign out of iNaturalist in Nature Copilot? This removes the encrypted OAuth token from the backend database and local token file. Your saved NGO records and published iNaturalist observations will not be deleted.");
+        if (!confirmed) return;
+        const button = document.getElementById("btn-signout-inat");
+        if (button) button.disabled = true;
+        try {
+            await ApiService.disconnectInaturalist();
+            ApiService.clearNgoPassword();
+            this.updateAuthStatusUI();
+            this._inatConnected = false;
+            this.cancelInatReview();
+            this.notify("Signed out. Nature Copilot cleared the stored iNaturalist token for this browser.", "success", 6500);
+            await this.loadInatUploadQueue();
+        } catch (error) {
+            this.notify(`Could not clear the iNaturalist session: ${error.message}`, "error", 8000);
+        } finally {
+            if (button) button.disabled = false;
         }
     },
 
