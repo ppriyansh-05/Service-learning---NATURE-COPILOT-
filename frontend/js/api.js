@@ -171,6 +171,12 @@ class ApiService {
     }
 
     // iNaturalist account connection and approval-gated publishing.
+    static startInaturalistConnection() {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint("/inaturalist/connect"), {
+            method: "POST"
+        });
+    }
+
     static getInaturalistStatus() {
         return this.fetchJson(window.APP_CONFIG.getEndpoint("/inaturalist/status"));
     }
