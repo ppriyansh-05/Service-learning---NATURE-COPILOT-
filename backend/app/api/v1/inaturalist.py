@@ -35,7 +35,7 @@ log = logging.getLogger("van-udyan.inaturalist")
 INAT_SITE = "https://www.inaturalist.org"
 OAUTH_STATE_MAX_AGE = 10 * 60
 STORE_KEY = "inaturalist_oauth"
-_STORE_PATH = Path(__file__).resolve().parents[3] / "data" / "processed" / "inaturalist_oauth.json"
+_STORE_PATH = Path(__file__).resolve().parents[4] / "data" / "processed" / "inaturalist_oauth.json"
 _PHOTO_PATH = re.compile(r"^/uploads/(upload_[A-Za-z0-9_]+\.(?:jpg|jpeg|png|webp))$", re.IGNORECASE)
 
 
