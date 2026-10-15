@@ -181,12 +181,28 @@ def _eligible_record(record_id: int) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="Verify or correct the species with an NGO reviewer before publishing.")
     upload_state = str(record.get("inaturalist_upload_status", "")).lower()
     remote_id = record.get("inaturalist_observation_id")
+    if upload_state in {"publishing", "photo_uploading"}:
+        started = record.get("inaturalist_upload_started_at")
+        try:
+            started_at = datetime.fromisoformat(str(started))
+            if started_at.tzinfo is None:
+                started_at = started_at.replace(tzinfo=timezone.utc)
+            stale = (datetime.now(timezone.utc) - started_at).total_seconds() > 15 * 60
+        except (TypeError, ValueError):
+            stale = True
+        if not stale:
+            raise HTTPException(status_code=409, detail="This record is already being published.")
+        # Recover stale locks after a worker restart. If the remote ID was saved,
+        # retry only the photo; otherwise permit a fresh attempt with a warning in the UI.
+        upload_state = "photo_failed" if remote_id else "failed"
+        record["inaturalist_upload_status"] = upload_state
+        record["inaturalist_upload_error"] = "Recovered a stale publishing lock; retry after checking iNaturalist."
+        record["inaturalist_upload_started_at"] = None
+        save_ngo_observations_store(records)
     # A remote observation with a failed photo upload can be retried safely by
     # attaching the photo to the same remote ID, never by creating a duplicate.
     if (record.get("observation_url") or remote_id) and not (remote_id and upload_state == "photo_failed"):
         raise HTTPException(status_code=409, detail="This record is already published or is being published.")
-    if upload_state in {"publishing", "photo_uploading"}:
-        raise HTTPException(status_code=409, detail="This record is already being published.")
     if not record.get("scientific_name"):
         raise HTTPException(status_code=400, detail="A verified scientific name is required.")
     photo_url = str(record.get("photo_url") or "")
@@ -341,6 +357,7 @@ def publish_observation(
     # submissions from double-clicks or concurrent requests.
     _update_record(observation_id, {
         "inaturalist_upload_status": "publishing" if not (remote_id and upload_state == "photo_failed") else "photo_uploading",
+        "inaturalist_upload_started_at": datetime.now(timezone.utc).isoformat(),
         "inaturalist_upload_error": None,
     })
     try:
@@ -391,6 +408,7 @@ def publish_observation(
                 "observation_url": url,
                 "inaturalist_observation_id": remote_id,
                 "inaturalist_upload_status": "photo_uploading",
+                "inaturalist_upload_started_at": datetime.now(timezone.utc).isoformat(),
                 "inaturalist_upload_error": None,
             })
         else:
@@ -419,6 +437,7 @@ def publish_observation(
             "observation_url": url,
             "inaturalist_observation_id": remote_id,
             "inaturalist_upload_status": "published",
+            "inaturalist_upload_started_at": None,
             "inaturalist_uploaded_at": datetime.now(timezone.utc).isoformat(),
             "inaturalist_upload_error": None,
         })
@@ -444,6 +463,7 @@ def publish_observation(
                 failure_status = "failed"
             _update_record(observation_id, {
                 "inaturalist_upload_status": failure_status,
+                "inaturalist_upload_started_at": None,
                 "inaturalist_upload_error": str(exc)[:300],
             })
         except Exception:
