@@ -252,8 +252,9 @@ def inaturalist_status():
     }
 
 
-@router.get("/connect")
-def connect_inaturalist():
+@router.post("/connect")
+def connect_inaturalist(_admin: str = Depends(verify_ngo_admin_password)):
+    """Only an authenticated NGO administrator may connect/replace the publishing account."""
     _require_oauth_config()
     params = {
         "client_id": settings.INATURALIST_CLIENT_ID,
@@ -262,7 +263,7 @@ def connect_inaturalist():
         "scope": "write",
         "state": _signed_state(),
     }
-    return RedirectResponse(f"{INAT_SITE}/oauth/authorize?{urlencode(params)}", status_code=302)
+    return {"authorization_url": f"{INAT_SITE}/oauth/authorize?{urlencode(params)}"}
 
 
 @router.get("/oauth/callback")
