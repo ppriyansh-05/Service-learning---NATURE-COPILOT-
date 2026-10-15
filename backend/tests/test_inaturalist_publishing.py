@@ -2,6 +2,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.v1 import inaturalist
+from app.services.data_service import exclude_linked_inaturalist_observations
 
 
 def _valid_record(**overrides):
@@ -80,3 +81,26 @@ def test_verified_planted_record_is_eligible_when_photo_and_gps_exist(monkeypatc
     assert record["_publish_photo_bytes"] == b"fake-image-bytes"
     assert record["_publish_latitude"] == 18.51
     assert record["_publish_longitude"] == 73.79
+
+
+
+def test_dashboard_hides_only_iNaturalist_rows_explicitly_linked_to_ngo_records():
+    ngo = [{
+        "id": 17,
+        "source": "NGO / New Upload",
+        "observation_type": "planted_rswf",
+        "inaturalist_observation_id": 12345,
+        "observation_url": "https://www.inaturalist.org/observations/12345",
+        "scientific_name": "Azadirachta indica",
+        "latitude": 18.51,
+        "longitude": 73.79,
+    }]
+    imported = [
+        {"id": 1, "source": "iNaturalist", "source_id": "12345", "scientific_name": "Azadirachta indica"},
+        {"id": 2, "source": "iNaturalist", "source_id": "99999", "scientific_name": "Azadirachta indica"},
+    ]
+
+    visible = exclude_linked_inaturalist_observations(imported + ngo, ngo)
+
+    assert [row.get("source_id") for row in visible if row.get("source") == "iNaturalist"] == ["99999"]
+    assert any(row.get("id") == 17 and row.get("source") == "NGO / New Upload" for row in visible)
