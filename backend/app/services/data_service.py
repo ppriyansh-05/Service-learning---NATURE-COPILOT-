@@ -43,8 +43,12 @@ def exclude_linked_inaturalist_observations(
     if ngo_records is None:
         ngo_records = load_ngo_observations_store()
 
+    # Some installations may store the cross-reference on the managed planted
+    # plant record instead of the field-observation record. Honour either link.
+    linked_records = list(ngo_records or []) + load_planted_plants_store()
+
     linked_ids = set()
-    for ngo_record in ngo_records or []:
+    for ngo_record in linked_records:
         remote_id = _inat_observation_id(ngo_record.get("inaturalist_observation_id"))
         if not remote_id:
             remote_id = _inat_observation_id(ngo_record.get("observation_url"))
