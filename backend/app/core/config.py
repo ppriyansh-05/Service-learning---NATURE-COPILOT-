@@ -234,4 +234,26 @@ class Settings:
         return result
 
 
+    # iNaturalist OAuth write access. All credentials remain server-side.
+    @property
+    def INATURALIST_CLIENT_ID(self) -> str:
+        return _str_env("INATURALIST_CLIENT_ID")
+
+    @property
+    def INATURALIST_CLIENT_SECRET(self) -> str:
+        return _str_env("INATURALIST_CLIENT_SECRET")
+
+    @property
+    def INATURALIST_REDIRECT_URI(self) -> str:
+        return _str_env("INATURALIST_REDIRECT_URI").rstrip("/")
+
+    @property
+    def INATURALIST_TOKEN_ENCRYPTION_KEY(self) -> str:
+        return _str_env("INATURALIST_TOKEN_ENCRYPTION_KEY")
+
+    @property
+    def FRONTEND_PUBLIC_URL(self) -> str:
+        return _str_env("FRONTEND_PUBLIC_URL").rstrip("/")
+
+
 settings = Settings()

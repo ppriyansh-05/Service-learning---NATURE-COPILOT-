@@ -170,6 +170,23 @@ class ApiService {
         return this.fetchJson(window.APP_CONFIG.getEndpoint(path));
     }
 
+    // iNaturalist account connection and approval-gated publishing.
+    static startInaturalistConnection() {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint("/inaturalist/connect"), {
+            method: "POST"
+        });
+    }
+
+    static getInaturalistStatus() {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint("/inaturalist/status"));
+    }
+
+    static publishInaturalistObservation(obsId) {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint(`/inaturalist/publish/${encodeURIComponent(obsId)}`), {
+            method: "POST"
+        });
+    }
+
     static getObservationById(id) {
         return this.fetchJson(window.APP_CONFIG.getEndpoint(`/observations/${id}`));
     }

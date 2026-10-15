@@ -401,33 +401,56 @@
             </div>
         </section>
 
-        <!-- iNATURALIST UPLOAD TAB — select newly uploaded NGO records and push to iNaturalist -->
+        <!-- iNATURALIST UPLOAD TAB — OAuth connection and approval-gated publishing -->
         <section id="tab-verify" class="tab-pane">
             <div class="section-header">
                 <div>
                     <h2>🌿 Upload to iNaturalist</h2>
-                    <p>Review your recent RSWF uploads here. Select records and click <strong>Upload Selected to iNaturalist</strong> to open draft pages; you must sign in to iNaturalist and submit each observation there. After submission, use <strong>Link submitted record</strong> to save its iNaturalist URL here. You can then open that external record to edit or delete it on iNaturalist. This app does not directly change remote iNaturalist records.</p>
+                    <p>Connect an authorized iNaturalist account, review verified RSWF planted-tree records, and approve each publication. Nature Copilot uploads the photo and observation only after approval.</p>
                 </div>
                 <div class="section-actions">
+                    <button class="btn-primary" id="btn-connect-inat" onclick="App.connectInaturalist()">🔗 Connect iNaturalist</button>
                     <button class="btn-primary" onclick="App.loadInatUploadQueue()">↻ Refresh</button>
-                    <button class="btn-primary btn-blue" id="btn-upload-to-inat" onclick="App.uploadSelectedToInat()" style="display:none">🌱 Open Selected on iNaturalist</button>
+                    <button class="btn-primary btn-blue" id="btn-review-inat" onclick="App.reviewSelectedForInat()" style="display:none">Review Selected</button>
+                </div>
+            </div>
+
+            <div class="panel" style="margin-top:0;margin-bottom:1rem;padding:1rem">
+                <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+                    <span id="inat-connection-indicator" class="pill pill-grey">Checking iNaturalist connection…</span>
+                    <span id="inat-connection-status" class="muted">Your iNaturalist authorization is handled by iNaturalist; the password is never collected by Nature Copilot.</span>
                 </div>
             </div>
 
             <div class="note-card" style="margin-top:0;margin-bottom:1rem">
-                <strong>How this works:</strong> This queue is only for trees marked <strong>Planted by RSWF</strong>. An NGO reviewer must verify/correct the species first; then select the verified tree and choose <strong>Open Selected on iNaturalist</strong>. iNaturalist opens in a new tab. Sign in there, attach the tree photo, review the location/date/species, and submit the observation yourself. Nature Copilot does not collect iNaturalist credentials or directly publish through the API. Public iNaturalist reference records are read-only and never appear in this queue.
+                <strong>Publishing rules:</strong> only NGO-owned records marked <strong>Planted by RSWF</strong> with a verified or corrected species can be submitted. The app checks the date, GPS, stored photo and duplicate status. Selecting a row does not publish it; review the preview and click <strong>Approve &amp; Upload</strong> to send it to iNaturalist.
+                <p style="margin-bottom:0.25rem"><strong>Duplicate protection:</strong> after a record is linked to its iNaturalist observation ID, the dashboard hides only that matching imported iNaturalist copy. The original NGO planted-tree record and monitoring history are retained.</p>
+                <p style="margin-bottom:0"><strong>Editing after upload:</strong> use <em>Edit on iNaturalist</em> in the row actions to edit the published observation on iNaturalist. This opens iNaturalist in a new tab; changes made there do not overwrite the original NGO register.</p>
             </div>
 
-            <!-- Selection bar -->
-            <div id="inat-select-bar" style="display:none; margin-bottom:0.75rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap">
+            <div id="inat-approval-panel" class="panel" style="display:none;margin-bottom:1rem">
+                <div class="panel-header">
+                    <h3>Review before publishing</h3>
+                    <span class="panel-tag">Approval required</span>
+                </div>
+                <p class="muted" style="margin-top:0">Check the species, photo, date and coordinates below. Approval submits the selected observations under the connected iNaturalist account.</p>
+                <div id="inat-approval-records" style="display:grid;gap:0.75rem"></div>
+                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:1rem">
+                    <button class="btn-primary btn-blue" id="btn-approve-upload-inat" onclick="App.approveAndUploadToInat()">✓ Approve &amp; Upload</button>
+                    <button class="btn-primary" onclick="App.cancelInatReview()">Cancel</button>
+                </div>
+                <div id="inat-upload-progress" class="muted" style="margin-top:0.75rem" aria-live="polite"></div>
+            </div>
+
+            <div id="inat-select-bar" style="display:none; margin-bottom:0.75rem; align-items:center; gap:0.75rem; flex-wrap:wrap">
                 <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.85rem">
-                    <input type="checkbox" id="inat-select-all" onchange="App.inatToggleSelectAll(this.checked)"> Select all
+                    <input type="checkbox" id="inat-select-all" onchange="App.inatToggleSelectAll(this.checked)"> Select all eligible records
                 </label>
                 <span id="inat-selected-count" class="muted" style="font-size:0.82rem">0 selected</span>
             </div>
 
             <div id="inat-queue-container" class="panel" style="min-height:300px;padding:0">
-                <div id="inat-queue-empty" class="muted" style="padding:3rem 1rem; text-align:center">Loading…</div>
+                <div id="inat-queue-empty" class="muted" style="padding:3rem 1rem;text-align:center">Loading…</div>
                 <div id="inat-queue-list"></div>
             </div>
         </section>
@@ -1158,8 +1181,8 @@
 
 <!-- Frontend JavaScript Modules -->
 <script src="js/config.js?v=v2026.10.13-2"></script>
-<script src="js/api.js?v=v2026.10.13-2"></script>
-<script src="js/app.js?v=v2026.10.14-bulk-review1"></script>
+<script src="js/api.js?v=v2026.10.15-inat-oauth2"></script>
+<script src="js/app.js?v=v2026.10.15-inat-oauth2"></script>
 
 </body>
 </html>

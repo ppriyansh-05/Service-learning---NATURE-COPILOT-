@@ -18,3 +18,4 @@ httpx2>=0.1.0
 # - pytesseract: cross-platform fallback, needs the `tesseract-ocr` system package (Dockerfile installs it)
 winsdk>=1.0.0b10; sys_platform == "win32"
 pytesseract>=0.3.10; sys_platform != "win32"
+cryptography>=42.0.0

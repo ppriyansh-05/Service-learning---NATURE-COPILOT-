@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from app.core.config import settings
 from app.services import photo_storage, state_sync
-from app.api.v1 import health, observations, species, zones, geography, map, statistics, planted_plants, export, analytics, reports, compliance
+from app.api.v1 import health, observations, species, zones, geography, map, statistics, planted_plants, export, analytics, reports, compliance, inaturalist
 
 log = logging.getLogger("van-udyan")
 
@@ -305,6 +305,7 @@ app.include_router(export.router, prefix=api_v1_prefix)
 app.include_router(analytics.router, prefix=api_v1_prefix)
 app.include_router(reports.router, prefix=api_v1_prefix)
 app.include_router(compliance.router, prefix=api_v1_prefix)
+app.include_router(inaturalist.router, prefix=api_v1_prefix)
 
 
 @app.get("/", include_in_schema=False)

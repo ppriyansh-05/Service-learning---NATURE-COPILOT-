@@ -41,6 +41,12 @@ const App = {
         this.initWeatherPill();
         await this.checkBackendHealth();
 
+        // OAuth callback returns to ?inat=connected#verify (or an error state).
+        const inatCallbackState = new URLSearchParams(location.search).get("inat");
+        if (inatCallbackState) {
+            history.replaceState(null, "", `${location.pathname}#verify`);
+        }
+
         // Open the tab named in the URL (e.g. #map), otherwise the overview
         const initialTab = (location.hash || "").replace("#", "");
         if (initialTab && initialTab !== "overview" && document.getElementById(`tab-${initialTab}`)) {
@@ -52,6 +58,9 @@ const App = {
                 this.showErrorBanner(`Could not load the overview: ${err.message}`);
             }
         }
+        if (inatCallbackState === "connected") this.notify("iNaturalist account connected. Select verified planted-tree records to review and approve.", "success", 7000);
+        else if (inatCallbackState === "error") this.notify("iNaturalist connection failed. Check backend OAuth configuration and try again.", "error", 8000);
+        else if (inatCallbackState === "cancelled") this.notify("iNaturalist connection was cancelled.", "warning");
     },
 
     // =====================================================================
@@ -2767,29 +2776,34 @@ Status: ${c.status}`;
         const empty = document.getElementById("inat-queue-empty");
         const list = document.getElementById("inat-queue-list");
         const selectBar = document.getElementById("inat-select-bar");
-        const uploadBtn = document.getElementById("btn-upload-to-inat");
+        const reviewBtn = document.getElementById("btn-review-inat");
         if (!empty || !list) return;
         empty.style.display = "block";
         empty.innerHTML = `<div class="muted">Loading…</div>`;
         list.innerHTML = "";
         if (selectBar) selectBar.style.display = "none";
-        if (uploadBtn) uploadBtn.style.display = "none";
+        if (reviewBtn) reviewBtn.style.display = "none";
+        const approvalPanel = document.getElementById("inat-approval-panel");
+        if (approvalPanel) approvalPanel.style.display = "none";
         try {
-            // fetch only NGO-uploaded observations (source != iNaturalist)
-            const all = await ApiService.getObservations({ source: "NGO / New Upload", limit: 200 });
-            const records = Array.isArray(all) ? all : (all.data || all.observations || []);
-            // Only planted-tree uploads belong in this workflow. Sightings stay in Observations.
+            const connection = await ApiService.getInaturalistStatus();
+            this.updateInatConnectionUI(connection);
+            // Only RSWF-owned planted-tree records belong in this workflow.
+            // The API caps a page at 200 records. Fetch all pages so older planted
+            // records are not silently missing from the upload queue.
+            const records = await this.fetchAllPages(
+                (params) => ApiService.getObservations({ ...params, source: "NGO / New Upload" })
+            );
             const items = records.filter(o =>
                 o.source !== "iNaturalist" && o.observation_type === "planted_rswf"
             );
             this._inatQueue = items;
             if (!items.length) {
-                empty.innerHTML = `<div style="font-size:2.5rem;margin-bottom:0.5rem">🌱</div><div>No RSWF planted-tree uploads found. Upload a tree photo and mark it as <strong>Planted by RSWF</strong>. After an NGO reviewer verifies its species, it will be selectable here for iNaturalist.</div>`;
+                empty.innerHTML = `<div style="font-size:2.5rem;margin-bottom:0.5rem">🌱</div><div>No RSWF planted-tree uploads found. Upload a tree photo and mark it as <strong>Planted by RSWF</strong>. After an NGO reviewer verifies its species, it will appear here.</div>`;
                 return;
             }
             empty.style.display = "none";
             if (selectBar) selectBar.style.display = "flex";
-            if (uploadBtn) uploadBtn.style.display = "inline-block";
             list.innerHTML = `
                 <div class="table-scroll">
                 <table class="data-table">
@@ -2809,59 +2823,96 @@ Status: ${c.status}`;
             this._updateInatSelectedCount();
         } catch (e) {
             empty.style.display = "block";
-            empty.innerHTML = `<div class="muted">Could not load observations: ${e.message}</div>`;
+            empty.innerHTML = `<div class="muted">Could not load the iNaturalist queue: ${this.esc(e.message)}</div>`;
+            this.notify("Could not refresh the iNaturalist connection or queue.", "error");
+        }
+    },
+
+    updateInatConnectionUI(connection) {
+        this._inatConnected = Boolean(connection && connection.connected);
+        const indicator = document.getElementById("inat-connection-indicator");
+        const status = document.getElementById("inat-connection-status");
+        const button = document.getElementById("btn-connect-inat");
+        if (indicator) {
+            indicator.className = this._inatConnected ? "pill pill-green" : "pill pill-grey";
+            indicator.textContent = this._inatConnected ? "✓ Connected" : (connection && connection.configured ? "Not connected" : "Setup required");
+        }
+        if (status) {
+            status.textContent = this._inatConnected
+                ? `Authorized account: ${connection.username || "iNaturalist"}. Publishing still requires NGO approval.`
+                : (connection && connection.configured
+                    ? "Connect the authorized NGO iNaturalist account to enable the approval and upload step."
+                    : `Backend setup is required. Missing/invalid settings: ${(connection && connection.missing_configuration || []).join(", ") || "check the backend logs"}.`);
+        }
+        if (button) {
+            button.textContent = this._inatConnected ? "↻ Reconnect iNaturalist" : "🔗 Connect iNaturalist";
+            button.disabled = !(connection && connection.configured);
+            button.title = button.disabled ? "iNaturalist OAuth environment settings are missing on the backend." : "Authorize Nature Copilot using iNaturalist's official sign-in page.";
         }
     },
 
     _inatQueueRow(o, i) {
         const photo = o.photo_url
-            ? `<img src="${window.APP_CONFIG.getEndpoint(o.photo_url)}" alt="obs" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--v-stroke)" onerror="this.outerHTML='<span class=&quot;muted&quot;>no photo</span>'">`
+            ? `<img src="${this.esc(this.thumbSrc(o.photo_url))}" alt="Tree photo" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--v-stroke)" onerror="this.outerHTML='<span class=&quot;muted&quot;>no photo</span>'">`
             : `<span class="muted">📷</span>`;
-        const typeLabel = o.observation_type === "planted_rswf"
-            ? `<span class="pill pill-green">🌱 Planted</span>`
-            : `<span class="pill pill-orange">👁️ Sighted</span>`;
+        const typeLabel = `<span class="pill pill-green">🌱 Planted</span>`;
         const status = String(o.identification_status || o.verification_status || "pending").toLowerCase();
         const verified = ["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase());
-        const uploaded = Boolean(o.observation_url);
+        const uploadState = String(o.inaturalist_upload_status || "").toLowerCase();
+        const hasRemoteRecord = Boolean(o.observation_url || o.inaturalist_observation_id);
+        const remoteId = String(o.inaturalist_observation_id || ((o.observation_url || "").match(/\/observations\/(\d+)/) || [])[1] || "");
+        const editUrl = /^\d+$/.test(remoteId) ? `https://www.inaturalist.org/observations/${remoteId}/edit` : "";
+        const uploaded = uploadState === "published" || (hasRemoteRecord && uploadState !== "photo_failed");
         const statusBadge = uploaded
-            ? `<span class="pill pill-green">✓ Uploaded to iNaturalist</span>`
-            : ["verified", "corrected", "confirmed"].includes(status)
-                ? `<span class="pill pill-green">${status === "corrected" ? "Corrected & verified" : "Verified"}</span>`
-                : status === "needs_review"
-                    ? `<span class="pill pill-orange">⚠️ Needs review</span>`
-                    : `<span class="pill pill-grey">Pending verification</span>`;
-        const selectDisabled = !verified || uploaded;
+            ? `<span class="pill pill-green">✓ Published to iNaturalist</span>`
+            : uploadState === "publishing" || uploadState === "photo_uploading"
+                ? `<span class="pill pill-orange">⏳ Publishing…</span>`
+                : uploadState === "photo_failed"
+                    ? `<span class="pill pill-orange" title="${this.esc(o.inaturalist_upload_error || "Photo upload failed")}">⚠ Remote record exists · retry photo</span>`
+                    : uploadState === "failed"
+                        ? `<span class="pill pill-orange" title="${this.esc(o.inaturalist_upload_error || "Upload failed")}">⚠ Upload failed · retry available</span>`
+                        : ["verified", "corrected", "confirmed"].includes(status)
+                            ? `<span class="pill pill-green">${status === "corrected" ? "Corrected & verified" : "Verified"}</span>`
+                            : status === "needs_review"
+                                ? `<span class="pill pill-orange">⚠️ Needs review</span>`
+                                : `<span class="pill pill-grey">Pending verification</span>`;
+        const selectDisabled = !verified || uploaded || ["publishing", "photo_uploading"].includes(uploadState);
         const selectTitle = uploaded
-            ? "Already linked to an iNaturalist observation"
-            : "NGO verification is required before preparing an iNaturalist draft";
+            ? "Already published to iNaturalist"
+            : uploadState === "publishing"
+                ? "This record is currently publishing"
+                : "NGO verification is required before publishing";
         return `<tr id="inat-row-${i}">
             <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" ${selectDisabled ? `disabled title="${selectTitle}"` : ""} onchange="App._updateInatSelectedCount()"></td>
             <td>${photo}</td>
             <td style="font-size:0.82rem">${this.esc(o.scientific_name || '—')}<br><span class="muted">${this.esc(o.common_name || '')}</span></td>
             <td>${typeLabel}</td>
-            <td style="font-size:0.82rem">${o.observed_on || '—'}</td>
-            <td style="font-size:0.82rem">${o.zone || '—'}</td>
+            <td style="font-size:0.82rem">${this.esc(o.observed_on || '—')}</td>
+            <td style="font-size:0.82rem">${this.esc(o.zone || '—')}</td>
             <td>${statusBadge}</td>
             <td>
-                <button class="btn-action" style="font-size:0.78rem" onclick="App.openObservationDetail(${o.id})">View</button>
-                ${o.observation_url ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${this.esc(o.observation_url)}" target="_blank" rel="noopener">View iNaturalist record ↗</a>` : `<button class="btn-action" style="font-size:0.78rem" onclick="App.linkInaturalistRecord(${o.id})">Link submitted record</button>`}
-                ${o.verification_status !== 'confirmed' ? `<button class="btn-primary" style="font-size:0.78rem;padding:0.25rem 0.6rem" onclick="App._inatQuickConfirm(${i})">Confirm</button>` : ''}
+                <button class="btn-action" style="font-size:0.78rem" onclick="App.openObservationDetail(${Number(o.id)})">View</button>
+                ${o.observation_url ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${this.esc(o.observation_url)}" target="_blank" rel="noopener">View iNaturalist record ↗</a>` : `<button class="btn-action" style="font-size:0.78rem" onclick="App.linkInaturalistRecord(${Number(o.id)})">Link existing record</button>`}
+                ${editUrl ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${editUrl}" target="_blank" rel="noopener" title="Edit the published observation on iNaturalist. The original NGO register remains unchanged.">Edit on iNaturalist ↗</a>` : ""}
+                ${!verified && !uploaded ? `<button class="btn-primary" style="font-size:0.78rem;padding:0.25rem 0.6rem" onclick="App._inatQuickConfirm(${i})">Confirm</button>` : ""}
             </td>
         </tr>`;
     },
 
     _updateInatSelectedCount() {
-        const cbs = document.querySelectorAll(".inat-select-cb:checked");
+        const cbs = document.querySelectorAll(".inat-select-cb:checked:not(:disabled)");
         const el = document.getElementById("inat-selected-count");
         if (el) el.textContent = `${cbs.length} selected`;
         const allCb = document.getElementById("inat-select-all");
-        const totalCbs = document.querySelectorAll(".inat-select-cb");
+        const totalCbs = document.querySelectorAll(".inat-select-cb:not(:disabled)");
         if (allCb) allCb.indeterminate = cbs.length > 0 && cbs.length < totalCbs.length;
-        if (allCb && cbs.length === totalCbs.length && totalCbs.length > 0) allCb.checked = true;
+        if (allCb) allCb.checked = totalCbs.length > 0 && cbs.length === totalCbs.length;
+        const reviewBtn = document.getElementById("btn-review-inat");
+        if (reviewBtn) reviewBtn.style.display = cbs.length > 0 ? "inline-block" : "none";
     },
 
     inatToggleSelectAll(checked) {
-        document.querySelectorAll(".inat-select-cb").forEach(cb => cb.checked = checked);
+        document.querySelectorAll(".inat-select-cb:not(:disabled)").forEach(cb => cb.checked = checked);
         this._updateInatSelectedCount();
     },
 
@@ -2894,38 +2945,126 @@ Status: ${c.status}`;
         }
     },
 
-    async uploadSelectedToInat() {
-        const checked = document.querySelectorAll(".inat-select-cb:checked");
-        if (!checked.length) { this.notify("Select at least one observation first.", "warning"); return; }
-        const ids = Array.from(checked).map(cb => cb.dataset.id);
-        const items = (this._inatQueue || []).filter(o =>
-            ids.includes(String(o.id)) &&
-            o.observation_type === "planted_rswf" &&
-            !o.observation_url &&
-            ["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase())
-        );
-        if (!items.length) {
-            this.notify("Only species-verified observations can be prepared for iNaturalist. Verify the species first.", "warning", 7000);
+    async connectInaturalist() {
+        if (!ApiService.getNgoPassword()) {
+            this.openAuthModal(() => this.connectInaturalist());
             return;
         }
+        try {
+            const status = await ApiService.getInaturalistStatus();
+            this.updateInatConnectionUI(status);
+            if (!status.configured) {
+                this.notify("iNaturalist OAuth is not configured on the backend yet. See docs/inaturalist_publishing.md and add the required Render environment variables.", "warning", 9000);
+                return;
+            }
+            const result = await ApiService.startInaturalistConnection();
+            if (!result || !result.authorization_url) throw new Error("The backend did not return an iNaturalist authorization URL.");
+            window.location.href = result.authorization_url;
+        } catch (e) {
+            this.notify(`Could not start iNaturalist sign-in: ${e.message}`, "error", 7000);
+        }
+    },
 
-        // Prepare iNaturalist draft pages; the user must review and submit on iNaturalist.
-        const links = items.map(o => {
-            const params = new URLSearchParams({
-                taxon_name: o.scientific_name || "",
-                observed_on_string: o.observed_on || "",
-                description: o.notes || `Tree planted by RSWF at Van Udyan, Bavdhan, Pune. NGO species verification completed. Zone: ${o.zone || 'unknown'}.`,
-                place_guess: "Bavdhan Van Udyan, Pune, Maharashtra, India",
-                latitude: o.latitude || "",
-                longitude: o.longitude || "",
-                "observation[tag_list]": "Van Udyan, RSWF, Bavdhan, Pune",
-            });
-            return { id: o.id, url: `https://www.inaturalist.org/observations/new?${params.toString()}`, name: o.scientific_name || `#${o.id}` };
-        });
+    _getSelectedInatRecords() {
+        const ids = Array.from(document.querySelectorAll(".inat-select-cb:checked")).map(cb => String(cb.dataset.id));
+        return (this._inatQueue || []).filter(o =>
+            ids.includes(String(o.id)) &&
+            o.observation_type === "planted_rswf" &&
+            ((!o.observation_url && !o.inaturalist_observation_id) || String(o.inaturalist_upload_status || "").toLowerCase() === "photo_failed") &&
+            ["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase()) &&
+            !["publishing", "photo_uploading", "published"].includes(String(o.inaturalist_upload_status || "").toLowerCase())
+        );
+    },
 
-        // Open iNaturalist tabs and show user a summary
-        links.forEach(l => window.open(l.url, "_blank"));
-        this.notify(`🌱 Opened ${links.length} verified planted-tree draft page${links.length > 1 ? 's' : ''} in new tabs. Sign in there, attach the tree photo, review the details, and press Submit on iNaturalist.`, "success", 8000);
+    reviewSelectedForInat() {
+        if (!this._inatConnected) {
+            this.notify("Connect an iNaturalist account before reviewing records for publication.", "warning", 7000);
+            return;
+        }
+        const items = this._getSelectedInatRecords();
+        if (!items.length) {
+            this.notify("Select at least one eligible, verified planted-tree record.", "warning");
+            return;
+        }
+        this._inatReviewItems = items;
+        const panel = document.getElementById("inat-approval-panel");
+        const container = document.getElementById("inat-approval-records");
+        const progress = document.getElementById("inat-upload-progress");
+        if (!panel || !container) return;
+        if (progress) progress.textContent = "";
+        container.innerHTML = items.map(o => {
+            const photo = o.photo_url ? `<img src="${this.esc(this.thumbSrc(o.photo_url))}" alt="Tree photo" style="width:92px;height:92px;object-fit:cover;border-radius:8px">` : "";
+            return `<div class="panel" style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap">
+                ${photo}
+                <div style="flex:1;min-width:180px">
+                    <strong>${this.esc(o.scientific_name || "Unknown species")}</strong>
+                    <div class="muted" style="font-size:0.84rem">${this.esc(o.common_name || "")}</div>
+                    <div style="margin-top:0.4rem;font-size:0.85rem">Date: ${this.esc(o.observed_on || "Missing date")} · Zone: ${this.esc(o.zone || "—")}</div>
+                    <div style="font-size:0.85rem">GPS: ${this.esc(o.latitude)} , ${this.esc(o.longitude)}</div>
+                    <div class="muted" style="font-size:0.82rem;margin-top:0.35rem">Record #${this.esc(o.id)} · NGO verification: ${this.esc(o.identification_status)}</div>
+                    ${o.notes ? `<p style="font-size:0.84rem;margin:0.4rem 0 0">${this.esc(o.notes)}</p>` : ""}
+                </div>
+            </div>`;
+        }).join("");
+        panel.style.display = "block";
+        panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+
+    cancelInatReview() {
+        this._inatReviewItems = [];
+        const panel = document.getElementById("inat-approval-panel");
+        if (panel) panel.style.display = "none";
+    },
+
+    async approveAndUploadToInat() {
+        if (!this._inatConnected) {
+            this.notify("Reconnect your iNaturalist account before publishing.", "warning");
+            return;
+        }
+        const items = this._inatReviewItems || [];
+        if (!items.length) {
+            this.notify("Review selected records before approving.", "warning");
+            return;
+        }
+        if (!ApiService.getNgoPassword()) {
+            this.openAuthModal(() => this.approveAndUploadToInat());
+            return;
+        }
+        const names = items.map(o => o.scientific_name || `#${o.id}`).join(", ");
+        if (!window.confirm(`Approve and publish ${items.length} observation(s) to iNaturalist under the connected account?\n\n${names}\n\nThe photo and GPS coordinates will be sent to iNaturalist.`)) return;
+
+        const approveButton = document.getElementById("btn-approve-upload-inat");
+        const progress = document.getElementById("inat-upload-progress");
+        if (approveButton) approveButton.disabled = true;
+        const results = [];
+        try {
+            for (let index = 0; index < items.length; index++) {
+                const item = items[index];
+                if (progress) progress.textContent = `Publishing ${index + 1} of ${items.length}: ${item.scientific_name || "observation"}…`;
+                try {
+                    const result = await ApiService.publishInaturalistObservation(item.id);
+                    results.push({ ok: true, item, result });
+                } catch (error) {
+                    results.push({ ok: false, item, error });
+                }
+            }
+            const success = results.filter(r => r.ok);
+            const failed = results.filter(r => !r.ok);
+            if (progress) {
+                progress.textContent = [
+                    ...success.map(r => `✓ ${r.item.scientific_name || "#" + r.item.id}: ${r.result.observation_url}`),
+                    ...failed.map(r => `⚠ ${r.item.scientific_name || "#" + r.item.id}: ${r.error.message}`)
+                ].join(" · ");
+            }
+            if (success.length) this.notify(`Published ${success.length} observation(s) to iNaturalist.`, "success", 7000);
+            if (failed.length) this.notify(`${failed.length} observation(s) failed. Check their status and retry after fixing the issue.`, "warning", 8000);
+            await this.loadInatUploadQueue();
+            this._inatReviewItems = [];
+            const panel = document.getElementById("inat-approval-panel");
+            if (panel) panel.style.display = "none";
+        } finally {
+            if (approveButton) approveButton.disabled = false;
+        }
     },
 
     // Keep old verification queue functions for backward compat (no longer shown in nav)
