@@ -2855,20 +2855,23 @@ Status: ${c.status}`;
         const typeLabel = `<span class="pill pill-green">🌱 Planted</span>`;
         const status = String(o.identification_status || o.verification_status || "pending").toLowerCase();
         const verified = ["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase());
-        const uploaded = Boolean(o.observation_url || o.inaturalist_observation_id);
         const uploadState = String(o.inaturalist_upload_status || "").toLowerCase();
-        const statusBadge = uploaded || uploadState === "published"
+        const hasRemoteRecord = Boolean(o.observation_url || o.inaturalist_observation_id);
+        const uploaded = uploadState === "published" || (hasRemoteRecord && uploadState !== "photo_failed");
+        const statusBadge = uploaded
             ? `<span class="pill pill-green">✓ Published to iNaturalist</span>`
-            : uploadState === "publishing"
+            : uploadState === "publishing" || uploadState === "photo_uploading"
                 ? `<span class="pill pill-orange">⏳ Publishing…</span>`
-                : uploadState === "failed"
-                    ? `<span class="pill pill-orange" title="${this.esc(o.inaturalist_upload_error || "Upload failed") }">⚠ Upload failed · retry available</span>`
-                    : ["verified", "corrected", "confirmed"].includes(status)
-                        ? `<span class="pill pill-green">${status === "corrected" ? "Corrected & verified" : "Verified"}</span>`
-                        : status === "needs_review"
-                            ? `<span class="pill pill-orange">⚠️ Needs review</span>`
-                            : `<span class="pill pill-grey">Pending verification</span>`;
-        const selectDisabled = !verified || uploaded || uploadState === "publishing";
+                : uploadState === "photo_failed"
+                    ? `<span class="pill pill-orange" title="${this.esc(o.inaturalist_upload_error || "Photo upload failed")}">⚠ Remote record exists · retry photo</span>`
+                    : uploadState === "failed"
+                        ? `<span class="pill pill-orange" title="${this.esc(o.inaturalist_upload_error || "Upload failed")}">⚠ Upload failed · retry available</span>`
+                        : ["verified", "corrected", "confirmed"].includes(status)
+                            ? `<span class="pill pill-green">${status === "corrected" ? "Corrected & verified" : "Verified"}</span>`
+                            : status === "needs_review"
+                                ? `<span class="pill pill-orange">⚠️ Needs review</span>`
+                                : `<span class="pill pill-grey">Pending verification</span>`;
+        const selectDisabled = !verified || uploaded || ["publishing", "photo_uploading"].includes(uploadState);
         const selectTitle = uploaded
             ? "Already published to iNaturalist"
             : uploadState === "publishing"
@@ -2891,7 +2894,7 @@ Status: ${c.status}`;
     },
 
     _updateInatSelectedCount() {
-        const cbs = document.querySelectorAll(".inat-select-cb:checked");
+        const cbs = document.querySelectorAll(".inat-select-cb:checked:not(:disabled)");
         const el = document.getElementById("inat-selected-count");
         if (el) el.textContent = `${cbs.length} selected`;
         const allCb = document.getElementById("inat-select-all");
@@ -2961,10 +2964,9 @@ Status: ${c.status}`;
         return (this._inatQueue || []).filter(o =>
             ids.includes(String(o.id)) &&
             o.observation_type === "planted_rswf" &&
-            !o.observation_url &&
-            !o.inaturalist_observation_id &&
+            ((!o.observation_url && !o.inaturalist_observation_id) || String(o.inaturalist_upload_status || "").toLowerCase() === "photo_failed") &&
             ["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase()) &&
-            String(o.inaturalist_upload_status || "").toLowerCase() !== "publishing"
+            !["publishing", "photo_uploading", "published"].includes(String(o.inaturalist_upload_status || "").toLowerCase())
         );
     },
 
