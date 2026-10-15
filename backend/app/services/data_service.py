@@ -9,6 +9,7 @@ import json
 import csv
 import math
 import io
+import re
 import zipfile
 from typing import Dict, Any, List, Optional, Tuple
 from shapely.geometry import shape, Point
@@ -18,6 +19,52 @@ from app.services import photo_storage
 def get_base_dir():
     current = os.path.dirname(os.path.abspath(__file__))
     return os.path.abspath(os.path.join(current, "..", "..", ".."))
+
+def _inat_observation_id(value: Any) -> Optional[str]:
+    """Extract an iNaturalist observation ID from an ID value or public observation URL."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    match = re.search(r"(?:/observations/|^|:)(\d+)(?:/edit)?(?:[?#].*)?$", text)
+    return match.group(1) if match else None
+
+
+def exclude_linked_inaturalist_observations(
+    records: List[Dict[str, Any]],
+    ngo_records: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """Hide imported iNaturalist copies already linked to NGO-owned records.
+
+    This is a presentation-layer de-duplication only: it never deletes or mutates
+    the source CSV, database rows, NGO register, or the observation on iNaturalist.
+    Match only on the explicit iNaturalist observation ID/URL, never on species or
+    coordinates, because different observations can legitimately share both.
+    """
+    if ngo_records is None:
+        ngo_records = load_ngo_observations_store()
+
+    linked_ids = set()
+    for ngo_record in ngo_records or []:
+        remote_id = _inat_observation_id(ngo_record.get("inaturalist_observation_id"))
+        if not remote_id:
+            remote_id = _inat_observation_id(ngo_record.get("observation_url"))
+        if remote_id:
+            linked_ids.add(remote_id)
+
+    if not linked_ids:
+        return records
+
+    visible = []
+    for record in records:
+        if str(record.get("source") or "").strip().lower() == "inaturalist":
+            remote_id = _inat_observation_id(record.get("source_id"))
+            if not remote_id:
+                remote_id = _inat_observation_id(record.get("observation_url"))
+            if remote_id and remote_id in linked_ids:
+                continue
+        visible.append(record)
+    return visible
+
 
 def load_clean_csv_records() -> List[Dict[str, Any]]:
     csv_path = os.path.join(get_base_dir(), "data", "processed", "inaturalist", "observations_van_udyan_clean.csv")
@@ -46,17 +93,19 @@ def load_clean_csv_records() -> List[Dict[str, Any]]:
                     "zone_status": row.get("zone_status", "OUTSIDE_ACTIVE_ZONES")
                 })
                 
-    # Append NGO created observations if present
+    # Append NGO-created observations if present. Keep the NGO register intact,
+    # while hiding any iNaturalist API copy that has the same explicitly linked ID.
+    ngo_records = []
     ngo_store_path = os.path.join(get_base_dir(), "data", "processed", "ngo_observations_store.json")
     if os.path.exists(ngo_store_path):
         try:
             with open(ngo_store_path, "r", encoding="utf-8") as f:
-                ngo_records = json.load(f)
+                ngo_records = json.load(f) or []
                 records.extend(ngo_records)
         except Exception:
             pass
 
-    return records
+    return exclude_linked_inaturalist_observations(records, ngo_records)
 
 DEFAULT_PLANTED_PLANTS = []
 
@@ -443,7 +492,10 @@ class DataService:
                     db_ids = {r["id"] for r in db_rows}
                     ngo_rows = [r for r in filter_observation_records(load_ngo_observations_store(), source, species, zone, quality_grade)
                                 if r.get("id") not in db_ids]
-                    combined = db_rows + ngo_rows
+                    combined = exclude_linked_inaturalist_observations(
+                        db_rows + ngo_rows,
+                        load_ngo_observations_store(),
+                    )
                     total_records = len(combined)
                     limit = max(1, min(limit, 10000))
                     page = max(1, page)
