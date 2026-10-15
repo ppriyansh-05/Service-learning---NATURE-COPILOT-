@@ -17,11 +17,11 @@ import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 
 import requests
 from cryptography.fernet import Fernet, InvalidToken
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 
 from app.core.config import settings
@@ -351,7 +351,7 @@ def publish_observation(
             if record.get("zone"):
                 provenance += f" Monitoring zone: {record['zone']}."
             if description:
-                description = description + "\\n\\n" + provenance
+                description = description + "\n\n" + provenance
             else:
                 description = provenance
             form_data = {
