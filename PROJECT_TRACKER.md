@@ -912,3 +912,15 @@ Key Changes:
 - Added setup instructions in [docs/inaturalist_publishing.md](./docs/inaturalist_publishing.md) and eligibility/OAuth-state tests in `backend/tests/test_inaturalist_publishing.py`.
 - **Not yet production-ready:** Render must be configured with `INATURALIST_CLIENT_ID`, `INATURALIST_CLIENT_SECRET`, `INATURALIST_REDIRECT_URI`, `INATURALIST_TOKEN_ENCRYPTION_KEY`, and `FRONTEND_PUBLIC_URL`; the callback URI must be registered with iNaturalist. The branch has not been deployed, no live iNaturalist account/API request has been tested, and the automated tests have not been run from this environment.
 - Security note: OAuth client secrets and the encryption key must stay in Render environment settings and must never be committed to Git.
+
+---
+
+### iNaturalist per-user OAuth follow-up (2026-10-15)
+- Changed the iNaturalist OAuth flow from one shared token to one encrypted token per browser account ID.
+- OAuth state is signed and binds the callback to the initiating browser account; account IDs are hashed before use as Postgres `app_state` keys.
+- Added `X-INAT-Account-ID` to CORS allow-headers and scoped status/publish requests to that browser account.
+- The Connect button now starts iNaturalist sign-in directly; NGO admin authorization remains required for the final Approve & Upload action.
+- Preserved verified planted-tree eligibility, photo/GPS/date checks, retry behavior, and Edit on iNaturalist links.
+- Added focused tests for OAuth state binding, account-key separation, and invalid account IDs.
+- Rollout: set existing OAuth application variables in Render as before, deploy the PR, then reconnect from each browser profile. Existing shared token is not auto-migrated; its old app_state row is left untouched.
+- Verification status: source changes prepared; automated tests, browser flow, live iNaturalist API and Render deployment still require verification. Do not publish test/synthetic observations to production.
