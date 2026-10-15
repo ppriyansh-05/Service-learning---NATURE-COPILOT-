@@ -21,6 +21,7 @@ Only NGO-owned records marked `planted_rswf` with `identification_status` of `ve
 - The status endpoint and publish endpoint only load the token for the current browser ID. A connection in one browser does not replace a connection in another.
 - The browser ID is a connection selector, not authentication. NGO admin authorization is still required to publish. Use separate browser profiles on shared computers; clicking **Switch iNaturalist account** reconnects the current browser profile to another account.
 - A shared browser profile represents one active iNaturalist connection at a time. Separate people who need simultaneous connections should use their own browser profiles.
+- The previous single shared connection is not automatically assigned to a browser ID. After this change deploys, reconnect iNaturalist once in each browser profile. The old `inaturalist_oauth` state row is not deleted by this change.
 
 ## Render setup required
 
