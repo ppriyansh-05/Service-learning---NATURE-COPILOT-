@@ -2,16 +2,25 @@
 
 Nature Copilot's iNaturalist Upload section now supports this workflow:
 
-1. An NGO administrator unlocks editing in Nature Copilot.
-2. They click **Connect iNaturalist** and sign in on iNaturalist's official page.
-3. The connected account and status appear in the upload section.
+1. A user opens the iNaturalist Upload section and clicks **Sign in to iNaturalist** (or **Switch iNaturalist account**).
+2. Nature Copilot redirects the user to iNaturalist's official OAuth sign-in/authorization page, then returns to the dashboard.
+3. The backend stores the encrypted token under a separate hashed key for that browser's account ID. It does not overwrite other browser connections.
 4. The user selects eligible RSWF planted-tree records and reviews the photo, species, date and GPS preview.
-5. After clicking **Approve & Upload**, the backend rechecks eligibility and submits the observation and stored photo to iNaturalist.
+5. After the NGO administrator enters the existing admin password and confirms **Approve & Upload**, the backend rechecks eligibility and submits the observation and stored photo under that browser's connected iNaturalist account.
 6. Nature Copilot saves the iNaturalist URL/ID and publishing status in the NGO observation store. Duplicate submissions are blocked.
 7. When dashboard data is loaded, an imported iNaturalist row is hidden from dashboard counts/lists only when its explicit iNaturalist observation ID matches a linked NGO planted-tree record. The source CSV, NGO record and remote iNaturalist observation are not deleted.
 8. For a linked/published record, **Edit on iNaturalist** opens that observation's edit page in a new tab. Edits there are made on iNaturalist; they do not overwrite the NGO's original planted-tree register or monitoring history.
 
 Only NGO-owned records marked `planted_rswf` with `identification_status` of `verified` or `corrected` can be published. Public iNaturalist reference records and ordinary sightings are excluded. The browser never receives the OAuth client secret or access token.
+
+## Multiple users and account isolation
+
+- The Client ID, Client Secret, callback URI and encryption key identify/configure the **Nature Copilot application** and are configured once on the backend in Render.
+- Each browser profile generates a random UUID and sends it in `X-INAT-Account-ID`. The OAuth state is signed and binds the callback to that ID.
+- Each encrypted token is stored under a distinct SHA-256-derived Postgres `app_state` key and separate development fallback file. Raw browser IDs and access tokens are not used as database keys.
+- The status endpoint and publish endpoint only load the token for the current browser ID. A connection in one browser does not replace a connection in another.
+- The browser ID is a connection selector, not authentication. NGO admin authorization is still required to publish. Use separate browser profiles on shared computers; clicking **Switch iNaturalist account** reconnects the current browser profile to another account.
+- A shared browser profile represents one active iNaturalist connection at a time. Separate people who need simultaneous connections should use their own browser profiles.
 
 ## Render setup required
 
@@ -40,7 +49,7 @@ The OAuth token is encrypted before it is saved. In production the encrypted con
 
 ## Operational notes
 
-- The final publish endpoint requires the existing NGO admin password as well as a connected iNaturalist account.
+- OAuth connection itself does not require the NGO admin password. The final publish endpoint still requires the existing NGO admin password as well as a connected iNaturalist account.
 - iNaturalist is the authority for the remote record. If publishing fails, the local queue shows a failed status; fix the reported issue and retry after checking iNaturalist for a record that may already have been created.
 - Species names are resolved to an exact iNaturalist taxon match before submission. If no exact match is returned, publishing stops rather than guessing.
 - The publish operation includes the uploaded photo, observation date, GPS coordinates, site description and Van Udyan/RSWF tags.
@@ -52,6 +61,6 @@ The OAuth token is encrypted before it is saved. In production the encrypted con
 ## API routes
 
 - `GET /api/v1/inaturalist/status` — connection status only (never returns a token).
-- `POST /api/v1/inaturalist/connect` — NGO-admin-protected OAuth start; returns an authorization URL.
+- `POST /api/v1/inaturalist/connect` — starts OAuth for the browser account ID in `X-INAT-Account-ID`; publishing remains NGO-admin-protected.
 - `GET /api/v1/inaturalist/oauth/callback` — OAuth callback.
 - `POST /api/v1/inaturalist/publish/{observation_id}` — NGO-admin-protected, approval-triggered publication.
