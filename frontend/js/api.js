@@ -170,20 +170,48 @@ class ApiService {
         return this.fetchJson(window.APP_CONFIG.getEndpoint(path));
     }
 
+    // Each browser profile gets a stable opaque ID so the backend can keep its
+    // iNaturalist OAuth token separate from every other user's connection.
+    // This ID is not an access token or a substitute for NGO admin authorization.
+    static getInaturalistAccountId() {
+        const storageKey = "nature_copilot_inaturalist_account_id";
+        try {
+            let id = window.localStorage.getItem(storageKey);
+            if (/^[a-f0-9-]{36}$/i.test(id || "")) return id.toLowerCase();
+            if (!window.crypto || typeof window.crypto.randomUUID !== "function") {
+                throw new Error("Secure browser ID generation is unavailable. Open Nature Copilot over HTTPS in a modern browser.");
+            }
+            id = window.crypto.randomUUID().toLowerCase();
+            window.localStorage.setItem(storageKey, id);
+            return id;
+        } catch (error) {
+            if (error && error.message && error.message.startsWith("Secure browser ID")) throw error;
+            throw new Error("Nature Copilot cannot save this browser's iNaturalist connection ID. Enable local storage and retry.");
+        }
+    }
+
+    static getInaturalistHeaders() {
+        return { "X-INAT-Account-ID": this.getInaturalistAccountId() };
+    }
+
     // iNaturalist account connection and approval-gated publishing.
     static startInaturalistConnection() {
         return this.fetchJson(window.APP_CONFIG.getEndpoint("/inaturalist/connect"), {
-            method: "POST"
+            method: "POST",
+            headers: this.getInaturalistHeaders()
         });
     }
 
     static getInaturalistStatus() {
-        return this.fetchJson(window.APP_CONFIG.getEndpoint("/inaturalist/status"));
+        return this.fetchJson(window.APP_CONFIG.getEndpoint("/inaturalist/status"), {
+            headers: this.getInaturalistHeaders()
+        });
     }
 
     static publishInaturalistObservation(obsId) {
         return this.fetchJson(window.APP_CONFIG.getEndpoint(`/inaturalist/publish/${encodeURIComponent(obsId)}`), {
-            method: "POST"
+            method: "POST",
+            headers: this.getInaturalistHeaders()
         });
     }
 

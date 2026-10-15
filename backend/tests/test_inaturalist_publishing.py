@@ -120,3 +120,27 @@ def test_dashboard_deduplication_also_honours_link_on_managed_planted_plant(monk
     visible = exclude_linked_inaturalist_observations(rows, [])
 
     assert [row["source_id"] for row in visible] == ["778"]
+
+
+def test_oauth_state_is_bound_to_the_browser_account(monkeypatch):
+    monkeypatch.setenv("INATURALIST_CLIENT_SECRET", "test-oauth-secret")
+    account_id = "12345678-1234-4234-8234-123456789abc"
+    state = inaturalist._signed_state(account_id)
+    assert inaturalist._validate_state(state) == account_id
+
+
+def test_account_store_keys_are_separate_and_do_not_expose_browser_ids():
+    first = "12345678-1234-4234-8234-123456789abc"
+    second = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    first_key = inaturalist._account_store_key(first)
+    second_key = inaturalist._account_store_key(second)
+    assert first_key != second_key
+    assert first not in first_key
+    assert second not in second_key
+
+
+def test_invalid_browser_account_id_is_rejected():
+    with pytest.raises(HTTPException) as exc:
+        inaturalist._validate_account_id("not-an-account-id")
+    assert exc.value.status_code == 400
+

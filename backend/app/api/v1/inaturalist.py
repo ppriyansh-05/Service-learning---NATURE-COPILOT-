@@ -21,7 +21,7 @@ from urllib.parse import urlencode
 
 import requests
 from cryptography.fernet import Fernet, InvalidToken
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import RedirectResponse
 
 from app.core.config import settings
@@ -34,8 +34,9 @@ log = logging.getLogger("van-udyan.inaturalist")
 
 INAT_SITE = "https://www.inaturalist.org"
 OAUTH_STATE_MAX_AGE = 10 * 60
-STORE_KEY = "inaturalist_oauth"
+STORE_KEY_PREFIX = "inaturalist_oauth:"
 _STORE_PATH = Path(__file__).resolve().parents[4] / "data" / "processed" / "inaturalist_oauth.json"
+_ACCOUNT_ID_RE = re.compile(r"^[a-f0-9-]{36}$", re.IGNORECASE)
 _PHOTO_PATH = re.compile(r"^/uploads/(upload_[A-Za-z0-9_]+\.(?:jpg|jpeg|png|webp))$", re.IGNORECASE)
 
 
@@ -81,11 +82,30 @@ def _fernet() -> Fernet:
         raise RuntimeError("INATURALIST_TOKEN_ENCRYPTION_KEY must be a valid Fernet key.") from exc
 
 
-def _signed_state() -> str:
-    # Signed timestamp + random nonce gives the callback a short-lived CSRF guard
-    # without relying on per-process memory (the service may run multiple workers).
+def _validate_account_id(account_id: str | None) -> str:
+    value = str(account_id or "").strip().lower()
+    if not _ACCOUNT_ID_RE.fullmatch(value):
+        raise HTTPException(status_code=400, detail="A valid browser account ID is required for this iNaturalist connection.")
+    return value
+
+
+def _account_store_key(account_id: str) -> str:
+    # Never store the browser identifier itself as a database key.
+    digest = hashlib.sha256(_validate_account_id(account_id).encode("ascii")).hexdigest()
+    return STORE_KEY_PREFIX + digest
+
+
+def _account_store_path(account_id: str) -> Path:
+    digest = hashlib.sha256(_validate_account_id(account_id).encode("ascii")).hexdigest()
+    return _STORE_PATH.with_name(f"inaturalist_oauth_{digest}.json")
+
+
+def _signed_state(account_id: str = "00000000-0000-0000-0000-000000000000") -> str:
+    # Signed timestamp + random nonce + browser account ID binds the callback to
+    # the browser that initiated OAuth without storing state in process memory.
     import secrets
-    payload = f"{int(time.time())}.{secrets.token_urlsafe(24)}"
+    account_id = _validate_account_id(account_id)
+    payload = f"{int(time.time())}.{secrets.token_urlsafe(24)}.{account_id}"
     signature = hmac.new(
         settings.INATURALIST_CLIENT_SECRET.encode("utf-8"),
         payload.encode("utf-8"),
@@ -94,12 +114,12 @@ def _signed_state() -> str:
     return base64.urlsafe_b64encode(f"{payload}.{signature}".encode("utf-8")).decode("ascii").rstrip("=")
 
 
-def _validate_state(state: str) -> bool:
+def _validate_state(state: str) -> str | None:
     try:
         padded = state + ("=" * (-len(state) % 4))
         decoded = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
-        timestamp_text, nonce, signature = decoded.split(".", 2)
-        payload = f"{timestamp_text}.{nonce}"
+        timestamp_text, nonce, account_id, signature = decoded.split(".", 3)
+        payload = f"{timestamp_text}.{nonce}.{account_id}"
         timestamp = int(timestamp_text)
         age = int(time.time()) - timestamp
         expected = hmac.new(
@@ -107,55 +127,61 @@ def _validate_state(state: str) -> bool:
             payload.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
-        return 0 <= age <= OAUTH_STATE_MAX_AGE and hmac.compare_digest(signature, expected)
+        if not (0 <= age <= OAUTH_STATE_MAX_AGE and hmac.compare_digest(signature, expected)):
+            return None
+        return _validate_account_id(account_id)
     except Exception:
-        return False
+        return None
 
 
-def _read_encrypted_store() -> dict[str, Any] | None:
-    # Supabase/Postgres state is authoritative in deployment; local encrypted
-    # storage is only the development fallback.
+def _read_encrypted_store(account_id: str) -> dict[str, Any] | None:
+    # Each browser connection has its own hashed app_state key and local fallback
+    # file, so one person's OAuth callback cannot replace another person's token.
+    store_key = _account_store_key(account_id)
+    store_path = _account_store_path(account_id)
     if state_sync.is_enabled():
         try:
             from sqlalchemy import text
             from app.db.session import engine
             with engine.connect() as conn:
-                row = conn.execute(text("SELECT value FROM app_state WHERE key = :k"), {"k": STORE_KEY}).fetchone()
+                row = conn.execute(text("SELECT value FROM app_state WHERE key = :k"), {"k": store_key}).fetchone()
             if row is not None:
                 value = row[0]
                 return value if isinstance(value, dict) else json.loads(value)
         except Exception as exc:
-            log.error("Could not read encrypted iNaturalist OAuth state from database: %s", exc)
+            log.error("Could not read encrypted iNaturalist OAuth state for account: %s", exc)
             if settings.IS_PRODUCTION:
                 raise RuntimeError("Could not read the encrypted iNaturalist connection from durable storage.") from exc
-    if _STORE_PATH.exists():
+    if store_path.exists():
         try:
-            value = json.loads(_STORE_PATH.read_text(encoding="utf-8"))
+            value = json.loads(store_path.read_text(encoding="utf-8"))
             return value if isinstance(value, dict) else None
         except Exception as exc:
-            log.warning("Could not read local iNaturalist OAuth store: %s", exc)
+            log.warning("Could not read local encrypted iNaturalist OAuth store: %s", exc)
     return None
 
 
-def _load_token_record() -> dict[str, Any] | None:
-    stored = _read_encrypted_store()
+def _load_token_record(account_id: str) -> dict[str, Any] | None:
+    stored = _read_encrypted_store(account_id)
     if not stored or not stored.get("ciphertext"):
         return None
     try:
         raw = _fernet().decrypt(stored["ciphertext"].encode("ascii"))
         value = json.loads(raw.decode("utf-8"))
         return value if isinstance(value, dict) and value.get("access_token") else None
-    except (InvalidToken, ValueError, TypeError, json.JSONDecodeError) as exc:
+    except (InvalidToken, ValueError, TypeError, json.JSONDecodeError):
         log.error("Stored iNaturalist OAuth credentials could not be decrypted; reconnect required.")
         return None
 
 
-def _save_token_record(record: dict[str, Any]) -> None:
+def _save_token_record(record: dict[str, Any], account_id: str) -> None:
+    store_key = _account_store_key(account_id)
+    store_path = _account_store_path(account_id)
     ciphertext = _fernet().encrypt(json.dumps(record).encode("utf-8")).decode("ascii")
     value = {"ciphertext": ciphertext, "updated_at": datetime.now(timezone.utc).isoformat()}
-    _STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _STORE_PATH.write_text(json.dumps(value), encoding="utf-8")
-    pushed = state_sync.push(STORE_KEY, value)
+    store_path.parent.mkdir(parents=True, exist_ok=True)
+    store_path.write_text(json.dumps(value), encoding="utf-8")
+    pushed = state_sync.push(store_key, value)
     if settings.IS_PRODUCTION and not pushed:
         raise RuntimeError("Could not persist the iNaturalist connection to durable database storage.")
 
@@ -252,9 +278,9 @@ def _resolve_taxon_id(access_token: str, scientific_name: str) -> int:
 
 
 @router.get("/status")
-def inaturalist_status():
-    # Report only the names of missing settings, never their values. This makes
-    # the disabled Connect button actionable instead of showing a generic error.
+def inaturalist_status(account_id: str | None = Header(None, alias="X-INAT-Account-ID")):
+    # Report only setting names, never secrets. Status is scoped to this browser's
+    # opaque account ID; it must not expose another browser's connected username.
     missing = []
     if not settings.INATURALIST_CLIENT_ID:
         missing.append("INATURALIST_CLIENT_ID")
@@ -272,8 +298,13 @@ def inaturalist_status():
         except RuntimeError:
             missing.append("INATURALIST_TOKEN_ENCRYPTION_KEY (must be a valid Fernet key)")
 
+    valid_account_id = None
     try:
-        record = _load_token_record() if not missing else None
+        valid_account_id = _validate_account_id(account_id) if account_id else None
+    except HTTPException:
+        valid_account_id = None
+    try:
+        record = _load_token_record(valid_account_id) if valid_account_id and not missing else None
     except Exception:
         log.exception("Failed to load iNaturalist connection state.")
         record = None
@@ -283,19 +314,21 @@ def inaturalist_status():
         "missing_configuration": missing,
         "connected": bool(record),
         "username": record.get("username") if record else None,
+        "account_required": not bool(valid_account_id),
     }
 
 
 @router.post("/connect")
-def connect_inaturalist(_admin: str = Depends(verify_ngo_admin_password)):
-    """Only an authenticated NGO administrator may connect/replace the publishing account."""
+def connect_inaturalist(account_id: str | None = Header(None, alias="X-INAT-Account-ID")):
+    """Start OAuth for this browser; final publishing remains NGO-admin protected."""
     _require_oauth_config()
+    account_id = _validate_account_id(account_id)
     params = {
         "client_id": settings.INATURALIST_CLIENT_ID,
         "redirect_uri": _redirect_uri(),
         "response_type": "code",
         "scope": "write",
-        "state": _signed_state(),
+        "state": _signed_state(account_id),
     }
     return {"authorization_url": f"{INAT_SITE}/oauth/authorize?{urlencode(params)}"}
 
@@ -308,7 +341,8 @@ def inaturalist_oauth_callback(
 ):
     if error:
         return _frontend_redirect("cancelled")
-    if not code or not state or not _validate_state(state):
+    account_id = _validate_state(state) if state else None
+    if not code or not account_id:
         return _frontend_redirect("error")
     try:
         _require_oauth_config()
@@ -343,7 +377,7 @@ def inaturalist_oauth_callback(
             "access_token": access_token,
             "username": username or "Connected iNaturalist account",
             "connected_at": datetime.now(timezone.utc).isoformat(),
-        })
+        }, account_id)
         return _frontend_redirect("connected")
     except Exception:
         log.exception("iNaturalist OAuth callback failed.")
@@ -353,9 +387,11 @@ def inaturalist_oauth_callback(
 @router.post("/publish/{observation_id}")
 def publish_observation(
     observation_id: int,
+    account_id: str | None = Header(None, alias="X-INAT-Account-ID"),
     _admin: str = Depends(verify_ngo_admin_password),
 ):
-    token_record = _load_token_record()
+    account_id = _validate_account_id(account_id)
+    token_record = _load_token_record(account_id)
     if not token_record:
         raise HTTPException(status_code=401, detail="Connect an iNaturalist account before publishing.")
     record = _eligible_record(observation_id)
