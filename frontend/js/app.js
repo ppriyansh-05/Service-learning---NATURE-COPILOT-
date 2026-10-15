@@ -2972,6 +2972,8 @@ Status: ${c.status}`;
         if (button) button.disabled = true;
         try {
             await ApiService.disconnectInaturalist();
+            ApiService.clearNgoPassword();
+            this.updateAuthStatusUI();
             this._inatConnected = false;
             this.cancelInatReview();
             this.notify("Signed out. Nature Copilot cleared the stored iNaturalist token for this browser.", "success", 6500);
