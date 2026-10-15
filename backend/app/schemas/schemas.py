@@ -29,6 +29,10 @@ class ObservationResponse(BaseModel):
     quality_grade: Optional[str] = None
     observer: Optional[str] = None
     observation_url: Optional[str] = None
+    inaturalist_observation_id: Optional[int] = None
+    inaturalist_upload_status: Optional[str] = None
+    inaturalist_upload_error: Optional[str] = None
+    observation_type: Optional[str] = None
     photo_url: Optional[str] = None
     latitude: float
     longitude: float
