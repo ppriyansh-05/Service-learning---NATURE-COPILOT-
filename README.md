@@ -41,6 +41,14 @@ A web dashboard and API that bring together public iNaturalist records, RSWF's p
 
 ---
 
+## 🌱 iNaturalist Publishing
+
+The **iNaturalist Upload** section supports an approval-gated publishing workflow for NGO-verified RSWF planted trees. An NGO administrator connects an iNaturalist account through OAuth, selects eligible records, reviews the photo/species/date/GPS preview, and explicitly approves the upload. The backend then submits the observation and photo and stores the returned iNaturalist link. Unverified records, ordinary sightings, and public iNaturalist reference records are excluded.
+
+Publishing requires server-side OAuth credentials, an encryption key, and a registered callback URL. See [`docs/inaturalist_publishing.md`](./docs/inaturalist_publishing.md) for Render environment variables and setup instructions. The feature is not ready for production publishing until those environment variables are configured and an end-to-end test has been completed.
+
+---
+ 
 ## 🏗️ Architecture
 
 ```
