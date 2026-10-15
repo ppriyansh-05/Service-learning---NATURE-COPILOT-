@@ -2857,8 +2857,8 @@ Status: ${c.status}`;
         const verified = ["verified", "corrected"].includes(String(o.identification_status || "").toLowerCase());
         const uploadState = String(o.inaturalist_upload_status || "").toLowerCase();
         const hasRemoteRecord = Boolean(o.observation_url || o.inaturalist_observation_id);
-        const remoteId = String(o.inaturalist_observation_id || ((o.observation_url || "").match(/\\/observations\\/(\\d+)/) || [])[1] || "");
-        const editUrl = /^\\d+$/.test(remoteId) ? `https://www.inaturalist.org/observations/${remoteId}/edit` : "";
+        const remoteId = String(o.inaturalist_observation_id || ((o.observation_url || "").match(/\/observations\/(\d+)/) || [])[1] || "");
+        const editUrl = /^\d+$/.test(remoteId) ? \`https://www.inaturalist.org/observations/\${remoteId}/edit\` : "";
         const uploaded = uploadState === "published" || (hasRemoteRecord && uploadState !== "photo_failed");
         const statusBadge = uploaded
             ? `<span class="pill pill-green">✓ Published to iNaturalist</span>`
