@@ -903,3 +903,12 @@ Key Changes:
 - Project owner confirms the live Render `CORS_ORIGINS` setting has been corrected to the dashboard URL and the project dataset has been uploaded.
 - This is owner-reported status; the current browser session, dataset contents/counts, upload completeness, and live API responses have not been independently checked from this repository connection.
 - Remaining final checks: confirm the dashboard no longer produces CORS/preflight errors; verify the uploaded dataset against the source (record counts, species names, dates, coordinates and zone assignments); export a backup; and confirm saved observations/photos survive a backend restart/redeploy. Do not treat the upload as proof of persistence or data quality until these checks pass.
+
+### iNaturalist OAuth and approval-gated publishing (2026-10-15)
+- Added a Connect iNaturalist action that uses the official OAuth authorization flow; the connect action and final publish endpoint require the existing NGO administrator password.
+- Added server-side encrypted token storage, OAuth state validation, connection status, exact scientific-name-to-iNaturalist taxon matching, photo upload, and persisted remote observation ID/URL/status.
+- The iNaturalist queue now exposes the selection preview and explicit **Approve & Upload** action. Only verified/corrected RSWF planted-tree records are eligible; public reference records and ordinary sightings are excluded.
+- Added retry-safe handling for a photo-upload failure after the remote observation was created, so a retry attaches the photo to the same iNaturalist record rather than creating another observation.
+- Added setup instructions in [docs/inaturalist_publishing.md](./docs/inaturalist_publishing.md) and eligibility/OAuth-state tests in `backend/tests/test_inaturalist_publishing.py`.
+- **Not yet production-ready:** Render must be configured with `INATURALIST_CLIENT_ID`, `INATURALIST_CLIENT_SECRET`, `INATURALIST_REDIRECT_URI`, `INATURALIST_TOKEN_ENCRYPTION_KEY`, and `FRONTEND_PUBLIC_URL`; the callback URI must be registered with iNaturalist. The branch has not been deployed, no live iNaturalist account/API request has been tested, and the automated tests have not been run from this environment.
+- Security note: OAuth client secrets and the encryption key must stay in Render environment settings and must never be committed to Git.
