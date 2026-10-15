@@ -144,3 +144,13 @@ def test_invalid_browser_account_id_is_rejected():
         inaturalist._validate_account_id("not-an-account-id")
     assert exc.value.status_code == 400
 
+def test_sign_out_removes_local_encrypted_token_file(monkeypatch, tmp_path):
+    account_id = "12345678-1234-4234-8234-123456789abc"
+    token_file = tmp_path / "token.json"
+    token_file.write_text('{"ciphertext":"encrypted"}', encoding="utf-8")
+    monkeypatch.setattr(inaturalist, "_account_store_path", lambda _account_id: token_file)
+    monkeypatch.setattr(inaturalist.state_sync, "is_enabled", lambda: False)
+
+    inaturalist._delete_token_record(account_id)
+
+    assert not token_file.exists()
