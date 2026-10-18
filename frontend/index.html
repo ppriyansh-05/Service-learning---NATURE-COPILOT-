@@ -406,9 +406,9 @@
             <div class="section-header">
                 <div>
                     <h2>🌿 Upload to iNaturalist</h2>
-                    <p>Connect an authorized iNaturalist account, review verified RSWF planted-tree records, and approve each publication. Nature Copilot uploads the photo and observation only after approval.</p>
+                    <p>Review verified RSWF planted-tree records, sign in to your iNaturalist account, and approve each publication.</p>
                 </div>
-                <div class="section-actions">
+                <div class="section-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap">
                     <button class="btn-primary" id="btn-connect-inat" onclick="App.connectInaturalist()">🔗 Sign in to iNaturalist</button>
                     <button class="btn-action" id="btn-signout-inat" onclick="App.signOutInaturalist()" style="display:none">Sign out &amp; clear session</button>
                     <button class="btn-primary" onclick="App.loadInatUploadQueue()">↻ Refresh</button>
@@ -416,15 +416,8 @@
                 </div>
             </div>
 
-            <div class="panel" style="margin-top:0;margin-bottom:1rem;padding:1rem">
-                <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
-                    <span id="inat-connection-indicator" class="pill pill-grey">Checking iNaturalist connection…</span>
-                    <span id="inat-connection-status" class="muted">Your iNaturalist authorization is handled by iNaturalist; the password is never collected by Nature Copilot.</span>
-                </div>
-            </div>
-
             <!-- 5-Step Visual Workflow Guide Banner -->
-            <div class="note-card" style="margin-top:0;margin-bottom:1rem;background:linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(59,130,246,0.06) 100%);border-left:4px solid #10b981;padding:0.9rem 1.1rem">
+            <div class="note-card" style="margin-top:0;margin-bottom:1.25rem;background:linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(59,130,246,0.06) 100%);border-left:4px solid #10b981;padding:0.9rem 1.1rem">
                 <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.4rem;display:flex;align-items:center;gap:0.4rem;color:var(--v-text-primary)">
                     <span>📋</span> 5-Step iNaturalist Workflow:
                 </div>
@@ -445,12 +438,6 @@
                         <strong>5. Sign Out</strong><br><span class="muted">Sign out and clear the Nature Copilot session when done.</span>
                     </div>
                 </div>
-            </div>
-
-            <div class="note-card" style="margin-top:0;margin-bottom:1rem">
-                <strong>Publishing flow:</strong> first save the field photo/record in Nature Copilot using the NGO password. Once an NGO reviewer verifies or corrects its species, an eligible <strong>Planted by RSWF</strong> record appears here. Select it, review the photo/species/date/GPS, sign in to iNaturalist, enter the NGO password when prompted, then click <strong>Approve &amp; Upload</strong>. When finished, click <strong>Sign out &amp; clear session</strong> to remove the stored iNaturalist token and clear the NGO admin session from this browser.
-                <p style="margin-bottom:0.25rem"><strong>Duplicate protection:</strong> after a record is linked to its iNaturalist observation ID, the dashboard hides only that matching imported iNaturalist copy. The original NGO planted-tree record and monitoring history are retained.</p>
-                <p style="margin-bottom:0"><strong>Editing after upload:</strong> use <em>Edit on iNaturalist</em> in the row actions to edit the published observation on iNaturalist. This opens iNaturalist in a new tab; changes made there do not overwrite the original NGO register.</p>
             </div>
 
             <div id="inat-approval-panel" class="panel" style="display:none;margin-bottom:1rem">
