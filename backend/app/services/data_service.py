@@ -965,6 +965,11 @@ class DataService:
                 raise ValueError("Use a valid iNaturalist observation URL, e.g. https://www.inaturalist.org/observations/123456.")
             target["observation_url"] = url
 
+        # iNaturalist publishing metadata (written back after user submits on iNaturalist)
+        for inat_field in ["inaturalist_observation_id", "inaturalist_upload_status", "inaturalist_uploaded_at"]:
+            if inat_field in update_data and update_data[inat_field] is not None:
+                target[inat_field] = update_data[inat_field]
+
         if "observation_type" in update_data and update_data["observation_type"] is not None:
             observation_type = safe_str(update_data["observation_type"])
             if observation_type not in {"sighted", "planted_rswf"}:
@@ -974,6 +979,28 @@ class DataService:
             # a managed planted-plant record or alter existing monitoring history.
 
         save_ngo_observations_store(ngo_records)
+
+        # Sync species changes back to the linked planted plant record (best-effort)
+        new_sci = update_data.get("scientific_name")
+        new_com = update_data.get("common_name")
+        if (new_sci or new_com) and target.get("observation_type") == "planted_rswf":
+            try:
+                plants = load_planted_plants_store()
+                linked = next(
+                    (p for p in plants if p.get("source_observation_id") == obs_id),
+                    None,
+                )
+                if linked:
+                    if new_sci:
+                        linked["scientific_name"] = safe_str(new_sci)
+                    if new_com:
+                        linked["common_name"] = safe_str(new_com)
+                    if not linked.get("planted_on") and target.get("observed_on"):
+                        linked["planted_on"] = target["observed_on"]
+                    save_planted_plants_store(plants)
+            except Exception:
+                pass  # Best-effort: never block the observation update
+
         return target
 
     # =====================================================================
@@ -1737,7 +1764,34 @@ class DataService:
 
         save_ngo_observations_store(ngo_records)
 
-        # 4. Update Database Repository Prediction Audit Record (preserving original AI prediction fields intact!)
+        # 4. Sync verified species back to the linked planted plant record (if this is a planted_rswf observation).
+        # This prevents users from having to re-enter species data they already verified in the observation.
+        if decision_clean in ("confirm", "correct") and verified_sci and target.get("observation_type") == "planted_rswf":
+            try:
+                plants = load_planted_plants_store()
+                linked = next(
+                    (p for p in plants if p.get("source_observation_id") == obs_id),
+                    None,
+                )
+                if linked:
+                    if verified_sci:
+                        linked["scientific_name"] = verified_sci
+                    if verified_com:
+                        linked["common_name"] = verified_com
+                    # Use the observation date if planted_on is still blank
+                    if not linked.get("planted_on") and target.get("observed_on"):
+                        linked["planted_on"] = target["observed_on"]
+                    linked["identification_status"] = status_code
+                    linked["status"] = "Alive"  # Assume alive once verified; user can correct in Edit
+                    # Only update notes if still showing the default placeholder
+                    default_note = "Created from RSWF-planted photo upload. Species, planting date, and health require RSWF verification."
+                    if linked.get("notes") == default_note:
+                        linked["notes"] = f"Species verified by NGO reviewer ({decision_clean}). Observation #{obs_id}."
+                    save_planted_plants_store(plants)
+            except Exception:  # pragma: no cover — sync is best-effort
+                pass
+
+        # 5. Update Database Repository Prediction Audit Record (preserving original AI prediction fields intact!)
         import datetime
         if latest_pred:
             latest_pred["user_confirmed"] = (decision_clean == "confirm")
