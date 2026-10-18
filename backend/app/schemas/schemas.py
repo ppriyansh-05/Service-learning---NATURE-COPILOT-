@@ -179,6 +179,9 @@ class NGOObservationUpdate(BaseModel):
     quality_grade: Optional[str] = Field(None, description="Quality grade")
     observation_url: Optional[str] = Field(None, description="Submitted iNaturalist observation URL for RSWF uploads")
     observation_type: Optional[str] = Field(None, description="RSWF-owned record type: sighted or planted_rswf")
+    inaturalist_observation_id: Optional[int] = Field(None, description="Numeric iNaturalist observation ID after publishing")
+    inaturalist_upload_status: Optional[str] = Field(None, description="iNaturalist upload state: published, failed, etc.")
+    inaturalist_uploaded_at: Optional[str] = Field(None, description="ISO timestamp when the observation was published to iNaturalist")
 
 class NGOObservationCreate(BaseModel):
     scientific_name: Optional[str] = Field(None, description="Species scientific name")

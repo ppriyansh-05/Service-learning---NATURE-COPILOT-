@@ -2963,17 +2963,16 @@ Status: ${c.status}`;
     },
 
     async signOutInaturalist() {
-        const confirmed = window.confirm("Sign out of iNaturalist in Nature Copilot? This removes the encrypted OAuth token from the backend database and local token file. Your saved NGO records and published iNaturalist observations will not be deleted.");
+        const confirmed = window.confirm("Sign out of iNaturalist in Nature Copilot? This removes the stored iNaturalist session for this browser. Your NGO admin session and saved records will not be affected.");
         if (!confirmed) return;
         const button = document.getElementById("btn-signout-inat");
         if (button) button.disabled = true;
         try {
+            // Only clear the iNaturalist session — do NOT clear the NGO admin password.
             await ApiService.disconnectInaturalist();
-            ApiService.clearNgoPassword();
-            this.updateAuthStatusUI();
             this._inatConnected = false;
             this.cancelInatReview();
-            this.notify("Signed out. Nature Copilot cleared the stored iNaturalist token for this browser.", "success", 6500);
+            this.notify("Signed out of iNaturalist. Your NGO admin session remains active.", "success", 6500);
             await this.loadInatUploadQueue();
         } catch (error) {
             this.notify(`Could not clear the iNaturalist session: ${error.message}`, "error", 8000);
@@ -3040,18 +3039,18 @@ Status: ${c.status}`;
             return;
         }
         const names = items.map(o => o.scientific_name || `#${o.id}`).join(", ");
-        if (!window.confirm(`Approve and publish ${items.length} observation(s) to iNaturalist under the connected account?\n\n${names}\n\nThe photo and GPS coordinates will be sent to iNaturalist.`)) return;
+        if (!window.confirm(`Approve and open ${items.length} observation(s) on iNaturalist?\n\n${names}\n\nEach record will open pre-filled on iNaturalist. Submit each one there, then paste the URL back here to link the record.`)) return;
 
         const approveButton = document.getElementById("btn-approve-upload-inat");
         const progress = document.getElementById("inat-upload-progress");
         if (approveButton) approveButton.disabled = true;
-        const results = [];
+        const saved = [];
         try {
             for (let index = 0; index < items.length; index++) {
                 const item = items[index];
-                if (progress) progress.textContent = `Preparing ${index + 1} of ${items.length}: ${item.scientific_name || "observation"}…`;
-                
-                // Open the pre-filled iNaturalist submission tab
+                if (progress) progress.textContent = `Opening ${index + 1} of ${items.length}: ${item.scientific_name || "observation"}…`;
+
+                // Open the pre-filled iNaturalist submission page
                 const params = new URLSearchParams({
                     taxon_name: item.scientific_name || "",
                     observed_on_string: (item.observed_on || "").slice(0, 10),
@@ -3061,17 +3060,49 @@ Status: ${c.status}`;
                     longitude: item.longitude || "",
                     "observation[tag_list]": "Van Udyan, RSWF, Bavdhan, Pune",
                 });
-                const url = `https://www.inaturalist.org/observations/new?${params.toString()}`;
-                window.open(url, "_blank");
-                results.push({ ok: true, item, result: { observation_url: url } });
+                const inatNewUrl = `https://www.inaturalist.org/observations/new?${params.toString()}`;
+                window.open(inatNewUrl, "_blank");
+
+                // After submitting on iNaturalist, the user gets a URL like
+                // https://www.inaturalist.org/observations/12345
+                // Ask them to paste it back so we can save it to the database.
+                const pasted = window.prompt(
+                    `✅ Submitted "${item.scientific_name || 'observation'}" on iNaturalist?\n\nPaste the new observation URL here to save it in Nature Copilot.\nExample: https://www.inaturalist.org/observations/12345\n\n(Press Cancel to skip — you can link it later using "Link existing record".)`,
+                );
+                if (pasted) {
+                    const clean = pasted.trim().split("?")[0].split("#")[0];
+                    const match = clean.match(/\/observations\/(\d+)/);
+                    if (match) {
+                        try {
+                            await ApiService.updateObservation(item.id, {
+                                observation_url: clean,
+                                inaturalist_observation_id: parseInt(match[1], 10),
+                                inaturalist_upload_status: "published",
+                                inaturalist_uploaded_at: new Date().toISOString(),
+                            });
+                            saved.push(item.scientific_name || `#${item.id}`);
+                            if (progress) progress.textContent = `✓ Saved iNaturalist link for ${item.scientific_name || "#" + item.id}`;
+                        } catch (saveErr) {
+                            this.notify(`Could not save link for ${item.scientific_name || "#" + item.id}: ${saveErr.message}`, "error", 7000);
+                        }
+                    } else {
+                        this.notify(`URL for "${item.scientific_name || "#" + item.id}" was not a valid iNaturalist observation URL — not saved. Use "Link existing record" to add it manually.`, "warning", 8000);
+                    }
+                }
             }
-            if (progress) {
-                progress.textContent = results.map(r => `✓ ${r.item.scientific_name || "#" + r.item.id}: opened on iNaturalist for publishing`).join(" · ");
+
+            if (saved.length > 0) {
+                if (progress) progress.textContent = `✓ Linked ${saved.length} observation(s) to iNaturalist: ${saved.join(", ")}`;
+                this.notify(`🌿 ${saved.length} observation(s) linked to iNaturalist and saved to Nature Copilot!`, "success", 8000);
+            } else {
+                if (progress) progress.textContent = "Observations opened on iNaturalist. Use 'Link existing record' once submitted.";
+                this.notify("🌿 Opened iNaturalist. Use 'Link existing record' to save URLs after submitting.", "info", 8000);
             }
-            this.notify(`🌿 Opened ${results.length} observation(s) on iNaturalist with coordinates and species pre-filled. Click 'Submit observation' on iNaturalist to finish!`, "success", 9000);
+
             this._inatReviewItems = [];
             const panel = document.getElementById("inat-approval-panel");
             if (panel) panel.style.display = "none";
+            await this.loadInatUploadQueue();
         } finally {
             if (approveButton) approveButton.disabled = false;
         }
