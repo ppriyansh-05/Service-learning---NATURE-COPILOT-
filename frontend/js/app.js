@@ -2994,13 +2994,9 @@ Status: ${c.status}`;
     },
 
     reviewSelectedForInat() {
-        if (!this._inatConnected) {
-            this.notify("Connect an iNaturalist account before reviewing records for publication.", "warning", 7000);
-            return;
-        }
         const items = this._getSelectedInatRecords();
         if (!items.length) {
-            this.notify("Select at least one eligible, verified planted-tree record.", "warning");
+            this.notify("Select at least one eligible, verified planted-tree record first.", "warning");
             return;
         }
         this._inatReviewItems = items;
@@ -3034,10 +3030,6 @@ Status: ${c.status}`;
     },
 
     async approveAndUploadToInat() {
-        if (!this._inatConnected) {
-            this.notify("Reconnect your iNaturalist account before publishing.", "warning");
-            return;
-        }
         const items = this._inatReviewItems || [];
         if (!items.length) {
             this.notify("Review selected records before approving.", "warning");
