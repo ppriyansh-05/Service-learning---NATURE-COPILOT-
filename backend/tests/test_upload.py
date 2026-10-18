@@ -83,7 +83,7 @@ def create_test_jpeg_with_gps(lat: float, lng: float, filename="test_exif.jpg", 
 def create_test_geotag_jpeg(text: str = "Lat 18.518511 Long 73.780200") -> bytes:
     """Helper creating a WhatsApp-style JPEG (no EXIF) with a visible GPS geotag overlay and a unique background."""
     from PIL import ImageDraw, ImageFont
-        try:
+    try:
         font = ImageFont.truetype("arial.ttf", 32)
     except Exception:
         font = ImageFont.load_default()
@@ -387,7 +387,7 @@ def create_gpsmap_camera_style_jpeg(overlay_text: str, size=(2448, 3264)) -> byt
     img = Image.frombytes("RGB", (size[0] // 8, size[1] // 8), os.urandom((size[0] // 8) * (size[1] // 8) * 3)).resize(size)
     d = ImageDraw.Draw(img)
     d.rectangle([380, size[1] - 330, size[0] - 60, size[1] - 40], fill=(60, 50, 45))
-        try:
+    try:
         font = ImageFont.truetype("arial.ttf", 44)
     except Exception:
         font = ImageFont.load_default()
