@@ -3086,7 +3086,11 @@ Status: ${c.status}`;
         if (!panel || !container) return;
         if (progress) progress.textContent = "";
         container.innerHTML = items.map(o => {
-            const photo = o.photo_url ? `<img src="${this.esc(this.thumbSrc(o.photo_url))}" alt="Tree photo" style="width:92px;height:92px;object-fit:cover;border-radius:8px">` : "";
+            const photoSrc = o.photo_url ? this.photoSrc(o.photo_url) : "";
+            const photo = o.photo_url ? `<div style="display:flex;flex-direction:column;align-items:center;gap:0.4rem">
+                <img src="${this.esc(this.thumbSrc(o.photo_url))}" alt="Tree photo" style="width:100px;height:100px;object-fit:cover;border-radius:8px;border:1px solid var(--v-stroke)">
+                <button type="button" class="btn-action" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="App.downloadPhotoFile('${this.esc(photoSrc)}', 'naturecopilot_obs${o.id}.jpg')">⬇ Download</button>
+            </div>` : "";
             return `<div class="panel" style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap">
                 ${photo}
                 <div style="flex:1;min-width:180px">
@@ -3096,6 +3100,9 @@ Status: ${c.status}`;
                     <div style="font-size:0.85rem">GPS: ${this.esc(o.latitude)} , ${this.esc(o.longitude)}</div>
                     <div class="muted" style="font-size:0.82rem;margin-top:0.35rem">Record #${this.esc(o.id)} · NGO verification: ${this.esc(o.identification_status)}</div>
                     ${o.notes ? `<p style="font-size:0.84rem;margin:0.4rem 0 0">${this.esc(o.notes)}</p>` : ""}
+                    ${o.photo_url ? `<div style="margin-top:0.5rem">
+                        <button type="button" class="btn-action" style="font-size:0.75rem;padding:0.25rem 0.6rem" onclick="App.copyPhotoToClipboard('${this.esc(photoSrc)}').then(ok => App.notify(ok ? '📋 Photo copied to clipboard! Paste it on iNaturalist.' : 'Could not copy automatically. Click Download instead.', ok ? 'success' : 'warning'))">📋 Copy Photo to Clipboard</button>
+                    </div>` : ""}
                 </div>
             </div>`;
         }).join("");
@@ -3127,11 +3134,20 @@ Status: ${c.status}`;
         if (approveButton) approveButton.disabled = true;
 
         try {
-            // Open each pre-filled iNaturalist new-observation page in a new tab.
-            // The form will have species, date, GPS, description pre-filled.
-            // The user submits it on iNaturalist, gets an observation URL
-            // (e.g. https://www.inaturalist.org/observations/12345)
-            // and then uses the "Link existing record" button to save it here.
+            // 1. Download or copy photos for each selected record so user doesn't have to search
+            for (let index = 0; index < items.length; index++) {
+                const item = items[index];
+                if (item.photo_url) {
+                    const filename = `naturecopilot_${(item.scientific_name || "tree").replace(/\s+/g, "_")}_obs${item.id}.jpg`;
+                    this.downloadPhotoFile(this.photoSrc(item.photo_url), filename);
+                    // Also attempt to copy the first image directly to system clipboard
+                    if (index === 0) {
+                        this.copyPhotoToClipboard(this.photoSrc(item.photo_url));
+                    }
+                }
+            }
+
+            // 2. Open each pre-filled iNaturalist new-observation page in a new tab.
             for (let index = 0; index < items.length; index++) {
                 const item = items[index];
                 if (progress) progress.textContent = `Opening record ${index + 1} of ${items.length}: ${item.scientific_name || "observation"}…`;
@@ -3144,7 +3160,6 @@ Status: ${c.status}`;
                     latitude: item.latitude || "",
                     longitude: item.longitude || "",
                 });
-                // Open in a new named tab (reuses same iNaturalist tab for each record)
                 window.open(`https://www.inaturalist.org/observations/new?${params.toString()}`, `_blank`);
             }
 
@@ -3154,17 +3169,76 @@ Status: ${c.status}`;
             if (panel) panel.style.display = "none";
 
             if (progress) {
-                progress.innerHTML = `✅ <strong>Opened ${items.length} record(s) on iNaturalist.</strong> After submitting each one there, click the <strong>"Link existing record"</strong> button in the table below to save the iNaturalist URL here.`;
+                progress.innerHTML = `✅ <strong>Opened ${items.length} record(s) on iNaturalist.</strong> Photo downloaded to your browser/Downloads bar — drag & drop or paste it into iNaturalist, then click <strong>"Link existing record"</strong> below to save the URL.`;
             }
 
             this.notify(
-                `🌿 Opened ${items.length} record(s) on iNaturalist with details pre-filled. Submit each observation on iNaturalist, then click “Link existing record” to save the URL in Nature Copilot.`,
-                "success", 12000
+                `🌿 Photo downloaded & details pre-filled! Drag the downloaded image into the iNaturalist tab (or paste), then click “Link existing record”.`,
+                "success", 14000
             );
 
             await this.loadInatUploadQueue();
         } finally {
             if (approveButton) approveButton.disabled = false;
+        }
+    },
+
+    // Helper to download an image file to browser downloads so user can drag-and-drop into iNaturalist
+    async downloadPhotoFile(url, filename) {
+        try {
+            const resp = await fetch(url, { mode: "cors" });
+            const blob = await resp.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = filename || "tree_observation.jpg";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        } catch (e) {
+            console.warn("Could not auto-download photo blob, opening direct link instead:", e);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename || "tree_observation.jpg";
+            a.target = "_blank";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    },
+
+    // Helper to copy image blob directly to system clipboard (supported in Chromium/modern browsers)
+    async copyPhotoToClipboard(url) {
+        try {
+            if (!navigator.clipboard || !window.ClipboardItem) return false;
+            const resp = await fetch(url, { mode: "cors" });
+            const blob = await resp.blob();
+            // Convert to png if necessary for clipboard compatibility
+            let pngBlob = blob;
+            if (blob.type !== "image/png") {
+                pngBlob = await new Promise((resolve) => {
+                    const img = new Image();
+                    img.crossOrigin = "anonymous";
+                    img.onload = () => {
+                        const canvas = document.createElement("canvas");
+                        canvas.width = img.naturalWidth;
+                        canvas.height = img.naturalHeight;
+                        const ctx = canvas.getContext("2d");
+                        ctx.drawImage(img, 0, 0);
+                        canvas.toBlob((b) => resolve(b || blob), "image/png");
+                    };
+                    img.onerror = () => resolve(blob);
+                    img.src = URL.createObjectURL(blob);
+                });
+            }
+            await navigator.clipboard.write([
+                new ClipboardItem({ "image/png": pngBlob })
+            ]);
+            return true;
+        } catch (err) {
+            console.log("Clipboard write image not permitted or supported:", err);
+            return false;
         }
     },
 
