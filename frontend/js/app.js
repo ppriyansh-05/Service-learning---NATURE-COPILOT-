@@ -3049,34 +3049,26 @@ Status: ${c.status}`;
         try {
             for (let index = 0; index < items.length; index++) {
                 const item = items[index];
-                if (progress) progress.textContent = `Publishing ${index + 1} of ${items.length}: ${item.scientific_name || "observation"}…`;
-                try {
-                    const result = await ApiService.publishInaturalistObservation(item.id);
-                    results.push({ ok: true, item, result });
-                } catch (error) {
-                    // If OAuth token is not in the backend database, seamlessly open the pre-filled iNaturalist submission page
-                    const params = new URLSearchParams({
-                        taxon_name: item.scientific_name || "",
-                        observed_on_string: item.observed_on || "",
-                        description: item.notes || `Observed at Van Udyan, Bavdhan, Pune by RSWF. Zone: ${item.zone || 'unknown'}.`,
-                        place_guess: "Bavdhan Van Udyan, Pune, Maharashtra, India",
-                        latitude: item.latitude || "",
-                        longitude: item.longitude || "",
-                        "observation[tag_list]": "Van Udyan, RSWF, Bavdhan, Pune",
-                    });
-                    const url = `https://www.inaturalist.org/observations/new?${params.toString()}`;
-                    window.open(url, "_blank");
-                    results.push({ ok: true, item, result: { observation_url: url } });
-                }
+                if (progress) progress.textContent = `Preparing ${index + 1} of ${items.length}: ${item.scientific_name || "observation"}…`;
+                
+                // Open the pre-filled iNaturalist submission tab
+                const params = new URLSearchParams({
+                    taxon_name: item.scientific_name || "",
+                    observed_on_string: (item.observed_on || "").slice(0, 10),
+                    description: item.notes || `Observed at Van Udyan, Bavdhan, Pune by RSWF. Zone: ${item.zone || 'unknown'}.`,
+                    place_guess: "Bavdhan Van Udyan, Pune, Maharashtra, India",
+                    latitude: item.latitude || "",
+                    longitude: item.longitude || "",
+                    "observation[tag_list]": "Van Udyan, RSWF, Bavdhan, Pune",
+                });
+                const url = `https://www.inaturalist.org/observations/new?${params.toString()}`;
+                window.open(url, "_blank");
+                results.push({ ok: true, item, result: { observation_url: url } });
             }
-            const success = results.filter(r => r.ok);
-            const failed = results.filter(r => !r.ok);
             if (progress) {
-                progress.textContent = success.map(r => `✓ ${r.item.scientific_name || "#" + r.item.id}: opened for publishing`).join(" · ");
+                progress.textContent = results.map(r => `✓ ${r.item.scientific_name || "#" + r.item.id}: opened on iNaturalist for publishing`).join(" · ");
             }
-            if (success.length) this.notify(`Published ${success.length} observation(s) to iNaturalist.`, "success", 7000);
-            if (failed.length) this.notify(`${failed.length} observation(s) failed. Check their status and retry after fixing the issue.`, "warning", 8000);
-            await this.loadInatUploadQueue();
+            this.notify(`🌿 Opened ${results.length} observation(s) on iNaturalist with coordinates and species pre-filled. Click 'Submit observation' on iNaturalist to finish!`, "success", 9000);
             this._inatReviewItems = [];
             const panel = document.getElementById("inat-approval-panel");
             if (panel) panel.style.display = "none";

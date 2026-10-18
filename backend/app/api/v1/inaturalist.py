@@ -427,7 +427,7 @@ def publish_observation(
     account_id = _validate_account_id(account_id)
     token_record = _load_token_record(account_id)
     if not token_record:
-        raise HTTPException(status_code=401, detail="Connect an iNaturalist account before publishing.")
+        raise HTTPException(status_code=400, detail="Connect an iNaturalist account before publishing.")
     record = _eligible_record(observation_id)
     photo_name = record.pop("_publish_photo_name")
     photo_bytes = record.pop("_publish_photo_bytes")
