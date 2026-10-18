@@ -23,20 +23,30 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True, scope="module")
 def cleanup_after_verification_tests():
-    yield
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     ngo_store = os.path.join(base_dir, "data", "processed", "ngo_observations_store.json")
     uploads_dir = os.path.join(base_dir, "data", "uploads")
+
+    # Snapshot existing records before test run
+    initial_records = []
+    if os.path.exists(ngo_store):
+        try:
+            with open(ngo_store, "r", encoding="utf-8") as f:
+                initial_records = json.load(f)
+        except Exception:
+            initial_records = []
+
+    yield
 
     DataService._ai_predictions_repository.clear()
 
     if os.path.exists(ngo_store):
         with open(ngo_store, "w", encoding="utf-8") as f:
-            json.dump([], f, indent=2)
+            json.dump(initial_records, f, indent=2)
 
     if os.path.exists(uploads_dir):
         for fname in os.listdir(uploads_dir):
-            if fname.startswith("upload_"):
+            if fname.startswith("upload_test_"):
                 try:
                     os.remove(os.path.join(uploads_dir, fname))
                 except Exception:

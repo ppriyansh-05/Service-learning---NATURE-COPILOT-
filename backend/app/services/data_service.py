@@ -200,11 +200,9 @@ def save_monitoring_store(records: List[Dict[str, Any]]):
 DUPLICATE_DHASH_MAX_DISTANCE = 6
 # A visually identical photo within this distance of an existing one is the same sighting
 DUPLICATE_SAME_SPOT_METERS = 10.0
-# Within this radius, two different photos are treated as the SAME physical plant by default.
-# A volunteer walking around a tree takes several photos from different angles — we don't want
-# each one to become its own observation. The uploader can override with allow_nearby_duplicate
-# when two plants really do grow this close together (e.g. dense plantings).
-SAME_PLANT_RADIUS_METERS = 0.5
+# Within this radius (0.15 m), two different photos are treated as the SAME physical plant by default.
+# The uploader can override with allow_nearby_duplicate when two plants grow closely.
+SAME_PLANT_RADIUS_METERS = 0.15
 
 class DuplicateObservationError(ValueError):
     """
@@ -975,15 +973,16 @@ class DataService:
             if observation_type not in {"sighted", "planted_rswf"}:
                 raise ValueError("observation_type must be 'sighted' or 'planted_rswf'.")
             target["observation_type"] = observation_type
-            # This changes the observation classification only. It does not create or delete
-            # a managed planted-plant record or alter existing monitoring history.
+            if observation_type == "planted_rswf":
+                # Automatically register into the Planted Plants store if not already present
+                DataService._register_planted_upload(target)
 
         save_ngo_observations_store(ngo_records)
 
         # Sync species changes back to the linked planted plant record (best-effort)
         new_sci = update_data.get("scientific_name")
         new_com = update_data.get("common_name")
-        if (new_sci or new_com) and target.get("observation_type") == "planted_rswf":
+        if target.get("observation_type") == "planted_rswf":
             try:
                 plants = load_planted_plants_store()
                 linked = next(
@@ -998,6 +997,9 @@ class DataService:
                     if not linked.get("planted_on") and target.get("observed_on"):
                         linked["planted_on"] = target["observed_on"]
                     save_planted_plants_store(plants)
+                else:
+                    # If not registered yet, register now
+                    DataService._register_planted_upload(target)
             except Exception:
                 pass  # Best-effort: never block the observation update
 
@@ -1292,18 +1294,18 @@ class DataService:
             "plant_code": f"{prefix}{sequence:03d}",
             "source": "Planted Plants",
             "source_observation_id": observation_id,
-            "scientific_name": None,
-            "common_name": None,
-            "planted_on": None,
-            "status": "Unknown",
+            "scientific_name": ngo_observation.get("scientific_name") or None,
+            "common_name": ngo_observation.get("common_name") or None,
+            "planted_on": ngo_observation.get("observed_on") or None,
+            "status": "Alive" if ngo_observation.get("scientific_name") else "Unknown",
             "latitude": float(ngo_observation["latitude"]),
             "longitude": float(ngo_observation["longitude"]),
             "zone_code": ngo_observation.get("zone") or None,
-            "notes": "Created from RSWF-planted photo upload. Species, planting date, and health require RSWF verification.",
+            "notes": f"Created from RSWF-planted observation #{observation_id}." if ngo_observation.get("scientific_name") else "Created from RSWF-planted photo upload. Species, planting date, and health require RSWF verification.",
             "photo_url": ngo_observation.get("photo_url"),
             "watering_interval_days": None,
             "last_watered_on": None,
-            "identification_status": "needs_review",
+            "identification_status": ngo_observation.get("identification_status") or "needs_review",
         }
         plants.append(plant)
         save_planted_plants_store(plants)
@@ -1685,8 +1687,8 @@ class DataService:
         if decision_clean not in {"confirm", "correct", "needs_review"}:
             raise ValueError(f"Invalid verification decision '{decision}'. Must be 'confirm', 'correct', or 'needs_review'.")
 
-        # 1. Verification is only for RSWF-owned uploads. Look in that store first
-        # so a numeric ID collision with an imported iNaturalist row cannot target the wrong record.
+        # 1. Verification is only for RSWF-owned uploads. Ensure iNaturalist records raise PermissionError
+        DataService.protect_inaturalist_record(obs_id)
         ngo_records = load_ngo_observations_store()
         obs = next((r for r in ngo_records if r.get("id") == obs_id), None)
         if not obs:
@@ -1788,6 +1790,8 @@ class DataService:
                     if linked.get("notes") == default_note:
                         linked["notes"] = f"Species verified by NGO reviewer ({decision_clean}). Observation #{obs_id}."
                     save_planted_plants_store(plants)
+                else:
+                    DataService._register_planted_upload(target)
             except Exception:  # pragma: no cover — sync is best-effort
                 pass
 

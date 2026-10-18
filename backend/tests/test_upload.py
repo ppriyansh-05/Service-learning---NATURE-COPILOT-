@@ -175,9 +175,9 @@ def test_upload_unsupported_file_type():
     response = client.post("/api/v1/observations/upload", files=files)
     assert response.status_code == 415
 
-# 9. Oversized file (>10MB)
+# 9. Oversized file (>50MB)
 def test_upload_oversized_file():
-    big_bytes = b"0" * (11 * 1024 * 1024)
+    big_bytes = b"0" * (51 * 1024 * 1024)
     files = {"file": ("large.jpg", big_bytes, "image/jpeg")}
     response = client.post("/api/v1/observations/upload", files=files)
     assert response.status_code == 413

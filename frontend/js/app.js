@@ -113,6 +113,14 @@ const App = {
         return `<span class="pill pill-grey">${this.esc(source || "Unknown")}</span>`;
     },
 
+    obsTypeLabel(o) {
+        const t = (o.observation_type || "sighted").toLowerCase();
+        if (t === "planted_rswf") {
+            return '<span class="pill pill-green" title="Planted by RSWF">🌱 Planted</span>';
+        }
+        return '<span class="pill pill-grey" title="Wild or naturally sighted plant">👁️ Sighted</span>';
+    },
+
     // Status badge: review state for RSWF uploads, quality grade for iNaturalist records
     statusBadge(o) {
         if (o.source === "NGO / New Upload") {
@@ -970,7 +978,7 @@ const App = {
         if (!tbody) return;
 
         if (res.data.length === 0) {
-            tbody.innerHTML = `<tr class="empty-row"><td colspan="9">No observations match the current filters.</td></tr>`;
+            tbody.innerHTML = `<tr class="empty-row"><td colspan="10">No observations match the current filters.</td></tr>`;
             document.getElementById("obs-page-info").textContent = "No results";
             document.getElementById("obs-prev-btn").disabled = true;
             document.getElementById("obs-next-btn").disabled = true;
@@ -991,6 +999,7 @@ const App = {
                 <td style="white-space:nowrap">${this.esc(o.observer || "—")}</td>
                 <td style="white-space:nowrap">${this.esc(o.observed_on || "—")}</td>
                 <td>${this.zoneLabel(o.zone)}</td>
+                <td>${this.obsTypeLabel(o)}</td>
                 <td>${this.statusBadge(o)}</td>
                 <td>${this.sourceLabel(o.source)}</td>
             </tr>`;
@@ -1903,10 +1912,9 @@ const App = {
             <div style="color:#e2e8f0">${value}</div>`;
 
         const intro = isNearby
-            ? `A plant is already recorded within <b>0.5 metres</b> of this spot as
+            ? `A plant is already recorded within <b>0.15 metres</b> of this spot as
                 <b style="color:#fbbf24">Observation #${dup.existing_observation_id}</b>.
-                This is probably the same plant from a different angle — the camera's GPS reading
-                naturally wobbles by a metre or two. If so, no new record is needed.`
+                This is probably the same plant from a different angle. If this really is a separate plant growing right next to it, choose 'record anyway'.`
             : `You've uploaded this photo before. It's saved as
                 <b style="color:#fbbf24">Observation #${dup.existing_observation_id}</b>,
                 so no new record was added.`;
@@ -1957,7 +1965,7 @@ const App = {
     },
 
     // Retries the upload with allow_nearby_duplicate=true so the backend records it as a new
-    // plant even though it sits within the 1-metre same-plant guard.
+    // plant even though it sits within the 0.15-metre same-plant guard.
     async recordNearbyAnyway() {
         const fileInput = document.getElementById("upload-photo-file");
         if (!fileInput || !fileInput.files || !fileInput.files.length) {
@@ -1965,21 +1973,68 @@ const App = {
             return;
         }
         const file = fileInput.files[0];
+        const obsType = document.querySelector('input[name="upload-obs-type"]:checked')?.value || "sighted";
+        const resultCard = document.getElementById("upload-result-card");
+        const resultTitle = document.getElementById("upload-result-title");
+        const resultDetails = document.getElementById("upload-result-details");
+        const resultPreview = document.getElementById("upload-result-preview");
+        const confirmBox = document.getElementById("geotag-confirmation-box");
+        const aiContainer = document.getElementById("upload-ai-trigger-container");
+
         try {
-            const res = await ApiService.uploadPhotoObservation(file, { allowNearbyDuplicate: true });
+            const res = await ApiService.uploadPhotoObservation(file, { allowNearbyDuplicate: true, obsType });
+            if (res.photo_url) {
+                const fullPhotoUrl = window.APP_CONFIG.getEndpoint(res.photo_url);
+                resultPreview.src = fullPhotoUrl;
+                resultPreview.alt = "Uploaded photo";
+                resultPreview.onerror = () => { resultPreview.style.display = "none"; };
+                resultPreview.style.display = "block";
+            }
+
             if (res.requires_confirmation) {
                 this.pendingGeotagData = res;
                 this.pendingGeotagAllowNearby = true;
+                resultTitle.innerHTML = "✓ GPS Found";
+                resultCard.style.background = "rgba(245, 158, 11, 0.1)";
+                resultCard.style.borderColor = "rgba(245, 158, 11, 0.35)";
+                resultTitle.style.color = "#fbbf24";
+                resultDetails.innerHTML = `
+                    <div style="font-weight:600;color:#fbbf24;margin-bottom:0.4rem">✓ GPS detected from image geotag</div>
+                    <div><b>Source:</b> Visible Image Geotag</div>
+                    <div><b>Latitude:</b> ${res.latitude.toFixed(6)}</div>
+                    <div><b>Longitude:</b> ${res.longitude.toFixed(6)}</div>
+                    <div><b>Zone Assignment:</b> <span style="color:#fbbf24;font-weight:600">${res.zone}</span></div>
+                    <div style="margin-top:0.4rem;color:#cbd5e1">${res.message}</div>
+                `;
+                if (confirmBox) confirmBox.style.display = "block";
+                if (aiContainer) aiContainer.style.display = "none";
+                resultCard.style.display = "block";
                 this.notify("Confirm the location to finish saving the new plant.", "warning");
-                document.getElementById("geotag-confirmation-box").style.display = "block";
                 return;
             }
+
             this.notify(`✓ Recorded as Observation #${res.observation_id}.`);
             this.currentUploadedObsId = res.observation_id;
+
+            resultTitle.innerHTML = "✓ GPS Found";
+            resultCard.style.background = "rgba(16, 185, 129, 0.1)";
+            resultCard.style.borderColor = "rgba(16, 185, 129, 0.3)";
+            resultTitle.style.color = "#10b981";
+            resultDetails.innerHTML = `
+                <div style="font-weight:600;color:#10b981;margin-bottom:0.4rem">✓ Recorded as a separate observation #${res.observation_id}</div>
+                <div><b>Latitude:</b> ${res.latitude ? res.latitude.toFixed(6) : "—"}</div>
+                <div><b>Longitude:</b> ${res.longitude ? res.longitude.toFixed(6) : "—"}</div>
+                <div><b>Zone Assignment:</b> <span style="color:#10b981;font-weight:600">${res.zone || "—"}</span></div>
+                <div style="margin-top:0.4rem;color:#94a3b8">${res.message || ""}</div>
+                ${res.plant_code ? `<div style="margin-top:0.5rem;color:#10b981;font-weight:600">🌱 Registered for RSWF monitoring · Plant code: ${this.esc(res.plant_code)}.</div>` : ""}
+            `;
+            if (confirmBox) confirmBox.style.display = "none";
+            if (aiContainer) aiContainer.style.display = "flex";
+            resultCard.style.display = "block";
+
             await this.loadObservations();
             await this.loadOverview();
             if (this.map) await this.loadMapData();
-            this.closeUploadPhotoModal();
         } catch (err) {
             this.notify(`Could not save: ${err.message}`, "error", 7000);
         }
@@ -2078,7 +2133,13 @@ const App = {
                         <input type="text" id="verif-correct-sci" placeholder="Scientific Name (Required, e.g. Moringa oleifera)" class="search-input" style="width:100%;font-size:0.8rem">
                         <input type="text" id="verif-correct-com" placeholder="Common Name (e.g. Drumstick Tree)" class="search-input" style="width:100%;font-size:0.8rem">
                     </div>
-                    <input type="text" id="verif-correct-notes" placeholder="Correction Reason / Notes (Optional)" class="search-input" style="width:100%;font-size:0.8rem;margin-bottom:0.6rem">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">
+                        <select id="verif-correct-type" class="select-input" style="width:100%;font-size:0.8rem">
+                            <option value="sighted">👁️ Sighted (wild)</option>
+                            <option value="planted_rswf">🌱 Planted by RSWF</option>
+                        </select>
+                        <input type="text" id="verif-correct-notes" placeholder="Correction Reason / Notes (Optional)" class="search-input" style="width:100%;font-size:0.8rem">
+                    </div>
                     <div style="display:flex;justify-content:flex-end;gap:0.5rem">
                         <button type="button" class="btn-action" style="font-size:0.75rem" onclick="App.toggleCorrectionForm()">Cancel</button>
                         <button type="button" class="btn-primary" style="font-size:0.75rem;background:linear-gradient(135deg,#3b82f6,#1d4ed8)" onclick="App.submitManualCorrection(${this.currentUploadedObsId})">Save Correction</button>
@@ -2128,6 +2189,7 @@ const App = {
     async _doSubmitManualCorrection(obsId) {
         const sci = document.getElementById("verif-correct-sci")?.value?.trim();
         const com = document.getElementById("verif-correct-com")?.value?.trim();
+        const obsType = document.getElementById("verif-correct-type")?.value;
         const notes = document.getElementById("verif-correct-notes")?.value?.trim();
 
         if (!sci) {
@@ -2136,6 +2198,9 @@ const App = {
         }
 
         try {
+            if (obsType) {
+                await ApiService.updateObservation(obsId, { observation_type: obsType });
+            }
             const res = await ApiService.verifyObservation(obsId, {
                 decision: "correct",
                 scientific_name: sci,
@@ -2218,6 +2283,7 @@ const App = {
 
         const meta = [
             ["Status", this.statusBadge(o)],
+            ["Type", this.obsTypeLabel(o)],
             ["Source", this.sourceLabel(o.source)],
             ["Observed on", this.esc(o.observed_on || "—")],
             ["Observer", this.esc(o.observer || "—")],
@@ -2250,7 +2316,7 @@ const App = {
             <div class="review-actions">
                 ${current && !["verified", "corrected"].includes(o.identification_status)
                     ? `<button type="button" class="btn-primary btn-small" onclick="App.reviewConfirm(${id}, ${current}, ${currentCom})">✅ Confirm ${this.esc(o.scientific_name)}</button>` : ""}
-                <button type="button" class="btn-primary btn-blue btn-small" onclick="App.toggleReviewCorrection()">✏️ Enter correct species</button>
+                <button type="button" class="btn-primary btn-blue btn-small" onclick="App.toggleReviewCorrection()">✏️ Edit species &amp; type</button>
                 <button type="button" class="btn-action" onclick="App.reviewNeedsExpert(${id})">❓ Needs expert review</button>
                 <button type="button" class="btn-action" id="btn-detail-rerun-ai" onclick="App.rerunDetailAI(${id})">🤖 ${suggestions.length ? "Re-run" : "Run"} Pl@ntNet AI</button>
                 <button type="button" class="btn-primary btn-green btn-small" onclick="App.addObservationAsPlantedPlant(${id})" title="Track this plant for watering and health monitoring">🌱 Add as Planted Plant</button>
@@ -2261,10 +2327,19 @@ const App = {
                     <div class="form-group"><label for="review-sci">Scientific name <span class="req">*</span></label><input type="text" id="review-sci" placeholder="e.g. Moringa oleifera" value="${this.esc(o.scientific_name || "")}"></div>
                     <div class="form-group"><label for="review-com">Common name</label><input type="text" id="review-com" placeholder="e.g. Drumstick tree" value="${this.esc(o.common_name || "")}"></div>
                 </div>
-                <div class="form-group"><label for="review-notes">Reason / notes</label><input type="text" id="review-notes" placeholder="e.g. Checked leaves and flowers in the field"></div>
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label for="review-obs-type">Record Type</label>
+                        <select id="review-obs-type" class="select-input" style="width:100%">
+                            <option value="sighted" ${(o.observation_type || "sighted") === "sighted" ? "selected" : ""}>👁️ Sighted (wild)</option>
+                            <option value="planted_rswf" ${o.observation_type === "planted_rswf" ? "selected" : ""}>🌱 Planted by RSWF</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label for="review-notes">Reason / notes</label><input type="text" id="review-notes" placeholder="e.g. Checked leaves and flowers in the field"></div>
+                </div>
                 <div style="display:flex;justify-content:flex-end;gap:0.5rem">
                     <button type="button" class="btn-action" onclick="App.toggleReviewCorrection()">Cancel</button>
-                    <button type="button" class="btn-primary btn-blue btn-small" onclick="App.reviewCorrect(${id})">Save species</button>
+                    <button type="button" class="btn-primary btn-blue btn-small" onclick="App.reviewCorrect(${id})">Save changes</button>
                 </div>
             </div>
             <div class="form-hint">Confirming or correcting a species needs the RSWF admin password.</div>`
@@ -2388,6 +2463,7 @@ const App = {
     reviewCorrect(obsId) {
         const sci = document.getElementById("review-sci")?.value?.trim();
         const com = document.getElementById("review-com")?.value?.trim();
+        const obsType = document.getElementById("review-obs-type")?.value;
         const notes = document.getElementById("review-notes")?.value?.trim();
         if (!sci) {
             this.notify("Please enter the correct scientific name.", "warning");
@@ -2395,6 +2471,9 @@ const App = {
         }
         this.requireAuth(async () => {
             try {
+                if (obsType) {
+                    await ApiService.updateObservation(obsId, { observation_type: obsType });
+                }
                 const res = await ApiService.verifyObservation(obsId, {
                     decision: "correct",
                     scientific_name: sci,
@@ -2403,7 +2482,7 @@ const App = {
                 });
                 await this.afterReview(obsId, `✏️ Observation #${obsId} saved as ${res.scientific_name || sci}.`);
             } catch (err) {
-                this.notify(`Could not save the species: ${err.message}`, "error", 7000);
+                this.notify(`Could not save changes: ${err.message}`, "error", 7000);
             }
         });
     },
