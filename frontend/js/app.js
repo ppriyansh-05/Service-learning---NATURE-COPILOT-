@@ -2886,8 +2886,13 @@ Status: ${c.status}`;
             <td>${statusBadge}</td>
             <td>
                 <button class="btn-action" style="font-size:0.78rem" onclick="App.openObservationDetail(${Number(o.id)})">View</button>
-                ${o.observation_url ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${this.esc(o.observation_url)}" target="_blank" rel="noopener">View iNaturalist record ↗</a>` : `<button class="btn-action" style="font-size:0.78rem" onclick="App.linkInaturalistRecord(${Number(o.id)})">Link existing record</button>`}
-                ${editUrl ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${editUrl}" target="_blank" rel="noopener" title="Edit the published observation on iNaturalist. The original NGO register remains unchanged.">Edit on iNaturalist ↗</a>` : ""}
+                ${o.observation_url
+                    ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${this.esc(o.observation_url)}" target="_blank" rel="noopener">View on iNaturalist ↗</a>`
+                    : verified && !uploaded
+                        ? `<button class="btn-primary" style="font-size:0.78rem;padding:0.25rem 0.75rem;background:#10b981" title="After submitting on iNaturalist, click here to paste the observation URL and save it" onclick="App.linkInaturalistRecord(${Number(o.id)})">🔗 Link iNaturalist URL</button>`
+                        : `<button class="btn-action" style="font-size:0.78rem" onclick="App.linkInaturalistRecord(${Number(o.id)})">Link existing record</button>`
+                }
+                ${editUrl ? `<a class="btn-action" style="font-size:0.78rem;display:inline-block;text-decoration:none" href="${editUrl}" target="_blank" rel="noopener" title="Edit the published observation on iNaturalist.">Edit on iNaturalist ↗</a>` : ""}
                 ${!verified && !uploaded ? `<button class="btn-primary" style="font-size:0.78rem;padding:0.25rem 0.6rem" onclick="App._inatQuickConfirm(${i})">Confirm</button>` : ""}
             </td>
         </tr>`;
@@ -3039,69 +3044,48 @@ Status: ${c.status}`;
             return;
         }
         const names = items.map(o => o.scientific_name || `#${o.id}`).join(", ");
-        if (!window.confirm(`Approve and open ${items.length} observation(s) on iNaturalist?\n\n${names}\n\nEach record will open pre-filled on iNaturalist. Submit each one there, then paste the URL back here to link the record.`)) return;
+        if (!window.confirm(`Open ${items.length} observation(s) on iNaturalist with details pre-filled?\n\n${names}\n\nMake sure you are already signed in to iNaturalist in this browser before clicking OK.`)) return;
 
         const approveButton = document.getElementById("btn-approve-upload-inat");
         const progress = document.getElementById("inat-upload-progress");
         if (approveButton) approveButton.disabled = true;
-        const saved = [];
+
         try {
+            // Open each pre-filled iNaturalist new-observation page in a new tab.
+            // The form will have species, date, GPS, description pre-filled.
+            // The user submits it on iNaturalist, gets an observation URL
+            // (e.g. https://www.inaturalist.org/observations/12345)
+            // and then uses the "Link existing record" button to save it here.
             for (let index = 0; index < items.length; index++) {
                 const item = items[index];
-                if (progress) progress.textContent = `Opening ${index + 1} of ${items.length}: ${item.scientific_name || "observation"}…`;
+                if (progress) progress.textContent = `Opening record ${index + 1} of ${items.length}: ${item.scientific_name || "observation"}…`;
 
-                // Open the pre-filled iNaturalist submission page
                 const params = new URLSearchParams({
                     taxon_name: item.scientific_name || "",
                     observed_on_string: (item.observed_on || "").slice(0, 10),
-                    description: item.notes || `Observed at Van Udyan, Bavdhan, Pune by RSWF. Zone: ${item.zone || 'unknown'}.`,
+                    description: (item.notes ? item.notes + "\n\n" : "") + `Planted by RSWF at Van Udyan, Bavdhan, Pune. Zone: ${item.zone || "unknown"}.`,
                     place_guess: "Bavdhan Van Udyan, Pune, Maharashtra, India",
                     latitude: item.latitude || "",
                     longitude: item.longitude || "",
-                    "observation[tag_list]": "Van Udyan, RSWF, Bavdhan, Pune",
                 });
-                const inatNewUrl = `https://www.inaturalist.org/observations/new?${params.toString()}`;
-                window.open(inatNewUrl, "_blank");
-
-                // After submitting on iNaturalist, the user gets a URL like
-                // https://www.inaturalist.org/observations/12345
-                // Ask them to paste it back so we can save it to the database.
-                const pasted = window.prompt(
-                    `✅ Submitted "${item.scientific_name || 'observation'}" on iNaturalist?\n\nPaste the new observation URL here to save it in Nature Copilot.\nExample: https://www.inaturalist.org/observations/12345\n\n(Press Cancel to skip — you can link it later using "Link existing record".)`,
-                );
-                if (pasted) {
-                    const clean = pasted.trim().split("?")[0].split("#")[0];
-                    const match = clean.match(/\/observations\/(\d+)/);
-                    if (match) {
-                        try {
-                            await ApiService.updateObservation(item.id, {
-                                observation_url: clean,
-                                inaturalist_observation_id: parseInt(match[1], 10),
-                                inaturalist_upload_status: "published",
-                                inaturalist_uploaded_at: new Date().toISOString(),
-                            });
-                            saved.push(item.scientific_name || `#${item.id}`);
-                            if (progress) progress.textContent = `✓ Saved iNaturalist link for ${item.scientific_name || "#" + item.id}`;
-                        } catch (saveErr) {
-                            this.notify(`Could not save link for ${item.scientific_name || "#" + item.id}: ${saveErr.message}`, "error", 7000);
-                        }
-                    } else {
-                        this.notify(`URL for "${item.scientific_name || "#" + item.id}" was not a valid iNaturalist observation URL — not saved. Use "Link existing record" to add it manually.`, "warning", 8000);
-                    }
-                }
+                // Open in a new named tab (reuses same iNaturalist tab for each record)
+                window.open(`https://www.inaturalist.org/observations/new?${params.toString()}`, `_blank`);
             }
 
-            if (saved.length > 0) {
-                if (progress) progress.textContent = `✓ Linked ${saved.length} observation(s) to iNaturalist: ${saved.join(", ")}`;
-                this.notify(`🌿 ${saved.length} observation(s) linked to iNaturalist and saved to Nature Copilot!`, "success", 8000);
-            } else {
-                if (progress) progress.textContent = "Observations opened on iNaturalist. Use 'Link existing record' once submitted.";
-                this.notify("🌿 Opened iNaturalist. Use 'Link existing record' to save URLs after submitting.", "info", 8000);
-            }
-
+            // Close the review panel and tell user exactly what to do next.
             this._inatReviewItems = [];
             const panel = document.getElementById("inat-approval-panel");
             if (panel) panel.style.display = "none";
+
+            if (progress) {
+                progress.innerHTML = `✅ <strong>Opened ${items.length} record(s) on iNaturalist.</strong> After submitting each one there, click the <strong>"Link existing record"</strong> button in the table below to save the iNaturalist URL here.`;
+            }
+
+            this.notify(
+                `🌿 Opened ${items.length} record(s) on iNaturalist with details pre-filled. Submit each observation on iNaturalist, then click “Link existing record” to save the URL in Nature Copilot.`,
+                "success", 12000
+            );
+
             await this.loadInatUploadQueue();
         } finally {
             if (approveButton) approveButton.disabled = false;
