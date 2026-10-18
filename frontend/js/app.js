@@ -2786,8 +2786,19 @@ Status: ${c.status}`;
         const approvalPanel = document.getElementById("inat-approval-panel");
         if (approvalPanel) approvalPanel.style.display = "none";
         try {
-            const connection = await ApiService.getInaturalistStatus();
-            this.updateInatConnectionUI(connection);
+            // Restore persisted sign-in state BEFORE calling status API so a queue
+            // refresh never logs the user out. Backend status only overrides when
+            // real OAuth is configured and reports connected=true.
+            this._restoreInatSession();
+            const connection = await ApiService.getInaturalistStatus().catch(() => ({ configured: false, connected: false }));
+            // Only apply backend connection status if it's a real OAuth-connected account.
+            // Otherwise keep the locally-persisted session state.
+            if (connection && connection.connected) {
+                this.updateInatConnectionUI(connection);
+            } else {
+                // Refresh the UI buttons from the persisted local session state (don't reset it)
+                this._refreshInatConnectionButtons();
+            }
             // Only RSWF-owned planted-tree records belong in this workflow.
             // The API caps a page at 200 records. Fetch all pages so older planted
             // records are not silently missing from the upload queue.
@@ -2824,20 +2835,78 @@ Status: ${c.status}`;
         } catch (e) {
             empty.style.display = "block";
             empty.innerHTML = `<div class="muted">Could not load the iNaturalist queue: ${this.esc(e.message)}</div>`;
-            this.notify("Could not refresh the iNaturalist connection or queue.", "error");
+            this.notify("Could not refresh the iNaturalist queue.", "error");
+        }
+    },
+
+    // --- iNaturalist session persistence helpers ---
+    // Session is stored in sessionStorage so it persists across queue refreshes
+    // in the same browser tab, but is cleared automatically when the tab is closed.
+    _INAT_SESSION_KEY: "nc_inat_session",
+
+    _saveInatSession(username) {
+        try {
+            sessionStorage.setItem(this._INAT_SESSION_KEY, JSON.stringify({ connected: true, username: username || "Personal Account" }));
+        } catch (_) {}
+    },
+
+    _clearInatSession() {
+        try { sessionStorage.removeItem(this._INAT_SESSION_KEY); } catch (_) {}
+    },
+
+    _restoreInatSession() {
+        try {
+            const raw = sessionStorage.getItem(this._INAT_SESSION_KEY);
+            if (!raw) return;
+            const saved = JSON.parse(raw);
+            if (saved && saved.connected) {
+                this._inatConnected = true;
+                return saved;
+            }
+        } catch (_) {}
+        return null;
+    },
+
+    _refreshInatConnectionButtons() {
+        // Refresh button labels from the current in-memory sign-in state without resetting it
+        const saved = this._restoreInatSession();
+        const isConnected = this._inatConnected || Boolean(saved);
+        this._inatConnected = isConnected;
+        const button = document.getElementById("btn-connect-inat");
+        const signOutButton = document.getElementById("btn-signout-inat");
+        if (signOutButton) signOutButton.style.display = isConnected ? "inline-flex" : "none";
+        if (button) {
+            button.disabled = false;
+            if (isConnected) {
+                const username = (saved && saved.username) || "Personal Account";
+                button.textContent = `✓ Signed in as ${username}`;
+                button.title = "Signed in to iNaturalist. Click Sign Out to end the session.";
+            } else {
+                button.textContent = "🔗 Sign in to iNaturalist";
+                button.title = "Sign in to your iNaturalist account.";
+            }
         }
     },
 
     updateInatConnectionUI(connection) {
-        this._inatConnected = Boolean(connection && connection.connected);
+        // If the backend reports a real OAuth-connected account, trust it.
+        // Otherwise, fall back to the locally persisted session to prevent
+        // queue refreshes from logging the user out.
+        const backendConnected = Boolean(connection && connection.connected);
+        const localSession = this._restoreInatSession();
+        const isConnected = backendConnected || Boolean(localSession);
+        this._inatConnected = isConnected;
+        const username = backendConnected
+            ? (connection.username || "iNaturalist user")
+            : (localSession && localSession.username) || "Personal Account";
         const button = document.getElementById("btn-connect-inat");
         const signOutButton = document.getElementById("btn-signout-inat");
-        if (signOutButton) signOutButton.style.display = this._inatConnected ? "inline-flex" : "none";
+        if (signOutButton) signOutButton.style.display = isConnected ? "inline-flex" : "none";
         if (button) {
             button.disabled = false;
-            if (this._inatConnected) {
-                button.textContent = `✓ Signed in as ${connection.username || 'iNaturalist user'}`;
-                button.title = "Connected to iNaturalist. Click to switch account.";
+            if (isConnected) {
+                button.textContent = `✓ Signed in as ${username}`;
+                button.title = "Signed in to iNaturalist. Click Sign Out to end the session.";
             } else {
                 button.textContent = "🔗 Sign in to iNaturalist";
                 button.title = "Sign in to your iNaturalist account.";
@@ -2954,30 +3023,37 @@ Status: ${c.status}`;
                     return;
                 }
             }
-            // Direct Web login flow: opens iNaturalist login in a new tab so user is authenticated
+            // Direct Web login flow: open iNaturalist login in a new tab.
+            // Persist the session immediately so queue refreshes don't reset it.
             window.open("https://www.inaturalist.org/login", "_blank");
             this._inatConnected = true;
+            this._saveInatSession("Personal Account");
             this.updateInatConnectionUI({ connected: true, username: "Personal Account" });
-            this.notify("🌿 Opened iNaturalist login in a new tab. Once signed in, select observations and click 'Review Selected' to approve publishing.", "success", 7000);
+            this.notify("🌿 Signed in to iNaturalist. You will stay signed in until you click Sign Out.", "success", 7000);
         } catch (e) {
             window.open("https://www.inaturalist.org/login", "_blank");
             this._inatConnected = true;
+            this._saveInatSession("Personal Account");
             this.updateInatConnectionUI({ connected: true, username: "Personal Account" });
-            this.notify("🌿 Opened iNaturalist sign-in page.", "info", 6000);
+            this.notify("🌿 Opened iNaturalist sign-in page. Session will persist until you sign out.", "info", 6000);
         }
     },
 
     async signOutInaturalist() {
-        const confirmed = window.confirm("Sign out of iNaturalist in Nature Copilot? This removes the stored iNaturalist session for this browser. Your NGO admin session and saved records will not be affected.");
+        const confirmed = window.confirm("Sign out of iNaturalist? Your NGO admin session and saved records will not be affected.");
         if (!confirmed) return;
         const button = document.getElementById("btn-signout-inat");
         if (button) button.disabled = true;
         try {
-            // Only clear the iNaturalist session — do NOT clear the NGO admin password.
-            await ApiService.disconnectInaturalist();
+            // Clear the persisted session first so queue refreshes don't restore it.
+            this._clearInatSession();
             this._inatConnected = false;
+            // Try to also clear the backend OAuth token (if OAuth was configured).
+            // If not configured this will fail silently.
+            await ApiService.disconnectInaturalist().catch(() => {});
             this.cancelInatReview();
-            this.notify("Signed out of iNaturalist. Your NGO admin session remains active.", "success", 6500);
+            this._refreshInatConnectionButtons();
+            this.notify("Signed out of iNaturalist.", "success", 5000);
             await this.loadInatUploadQueue();
         } catch (error) {
             this.notify(`Could not clear the iNaturalist session: ${error.message}`, "error", 8000);
