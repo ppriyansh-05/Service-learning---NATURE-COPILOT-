@@ -2687,11 +2687,13 @@ const App = {
         const body = document.getElementById("obs-detail-body");
         if (!modal || !body) return;
         if (this.leafletMap) this.leafletMap.closePopup();
+        this.currentDetailPlant = null;
         document.getElementById("obs-detail-title").textContent = `Observation #${obsId}`;
         body.innerHTML = `<div class="loading-text">Loading observation...</div>`;
         modal.style.display = "flex";
         try {
             const obs = await ApiService.getObservationById(obsId);
+            this.currentDetailPlant = null;
             this.currentDetailObs = obs;
             this.renderObservationDetail(obs);
         } catch (err) {
@@ -2699,10 +2701,37 @@ const App = {
         }
     },
 
+    // Planted plants are separate managed records, so use their own detail endpoint.
+    // This shared modal mirrors the image + structured metadata layout used for observations.
+    async openPlantedPlantDetail(plantId) {
+        const modal = document.getElementById("obs-detail-modal");
+        const body = document.getElementById("obs-detail-body");
+        const title = document.getElementById("obs-detail-title");
+        if (!modal || !body || !title) return;
+        if (this.leafletMap) this.leafletMap.closePopup();
+
+        this.currentDetailObs = null;
+        this.currentDetailPlant = null;
+        title.textContent = `🌱 Planted plant #${Number(plantId)}`;
+        body.innerHTML = `<div class="loading-text">Loading planted plant details...</div>`;
+        modal.style.display = "flex";
+
+        try {
+            const plant = await ApiService.getPlantedPlantById(Number(plantId));
+            this.currentDetailPlant = plant;
+            title.textContent = `🌱 ${plant.common_name || plant.scientific_name || plant.plant_code || "Planted plant"}`;
+            const history = await ApiService.getPlantMonitoringHistory(Number(plantId)).catch(() => []);
+            this.renderPlantedPlantDetail(plant, Array.isArray(history) ? history : []);
+        } catch (err) {
+            body.innerHTML = `<div style="color:#f87171">Could not load planted plant #${Number(plantId)}: ${this.esc(err.message)}</div>`;
+        }
+    },
+
     closeObservationDetail() {
         const modal = document.getElementById("obs-detail-modal");
         if (modal) modal.style.display = "none";
         this.currentDetailObs = null;
+        this.currentDetailPlant = null;
     },
 
     renderObservationDetail(o, freshPredictions = null) {
