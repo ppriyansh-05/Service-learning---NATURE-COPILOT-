@@ -316,11 +316,20 @@
                 </select>
             </div>
 
+            <div class="controls-bar" style="justify-content:space-between;align-items:center;gap:0.75rem">
+                <span id="obs-selected-count" class="muted">0 selected · selections can span pages</span>
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                    <button id="obs-clear-selection-btn" class="btn-action" onclick="App.clearObsSelection()" disabled>Clear selection</button>
+                    <button id="obs-bulk-delete-btn" class="btn-action delete" onclick="App.deleteSelectedObservations()" disabled>🗑️ Delete selected</button>
+                </div>
+            </div>
+
             <div class="table-card">
                 <div class="table-scroll">
                     <table class="data-table">
                         <thead>
                             <tr>
+                                <th><input type="checkbox" id="obs-select-page" aria-label="Select deletable observations on this page" onchange="App.toggleObsPageSelection(this.checked)"></th>
                                 <th>#</th>
                                 <th>Photo</th>
                                 <th>Scientific Name</th>
@@ -334,7 +343,7 @@
                             </tr>
                         </thead>
                         <tbody id="obs-table-body">
-                            <tr class="empty-row"><td colspan="10">Loading observation records...</td></tr>
+                            <tr class="empty-row"><td colspan="11">Loading observation records...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -544,12 +553,21 @@
                 </select>
             </div>
 
+            <div class="controls-bar" style="justify-content:space-between;align-items:center;gap:0.75rem">
+                <span id="planted-selected-count" class="muted">0 plants selected · selections can span pages</span>
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                    <button id="planted-clear-selection-btn" class="btn-action" onclick="App.clearPlantedSelection()" disabled>Clear selection</button>
+                    <button id="planted-bulk-delete-btn" class="btn-action delete" onclick="App.deleteSelectedPlantedPlants()" disabled>🗑️ Delete selected</button>
+                </div>
+            </div>
+
             <!-- Planted Plants Data Table -->
             <div class="table-card">
                 <div class="table-scroll">
                     <table class="data-table">
                         <thead>
                             <tr>
+                                <th><input type="checkbox" id="planted-select-page" aria-label="Select planted plants on this page" onchange="App.togglePlantedPageSelection(this.checked)"></th>
                                 <th>Plant Code</th>
                                 <th>Scientific Name</th>
                                 <th>Common Name</th>
@@ -560,7 +578,7 @@
                             </tr>
                         </thead>
                         <tbody id="planted-table-body">
-                            <tr class="empty-row"><td colspan="7">Loading planted plant records...</td></tr>
+                            <tr class="empty-row"><td colspan="8">Loading planted plant records...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1193,9 +1211,9 @@
 <script src="js/config.local.js" onerror="void 0"></script>
 
 <!-- Frontend JavaScript Modules -->
-<script src="js/config.js?v=v2026.10.18-inat-v3"></script>
-<script src="js/api.js?v=v2026.10.18-inat-v3"></script>
-<script src="js/app.js?v=v2026.10.18-inat-v3"></script>
+<script src="js/config.js?v=v2026.10.24-bulk-delete"></script>
+<script src="js/api.js?v=v2026.10.24-bulk-delete"></script>
+<script src="js/app.js?v=v2026.10.24-bulk-delete"></script>
 
 </body>
 </html>
