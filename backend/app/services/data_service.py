@@ -859,6 +859,41 @@ class DataService:
         return True
 
     @staticmethod
+    def bulk_delete_planted_plants(plant_ids: List[int]) -> Dict[str, Any]:
+        """Remove selected managed plant records in one write, without cascading to other stores."""
+        requested_ids = list(dict.fromkeys(int(plant_id) for plant_id in plant_ids))
+        records = load_planted_plants_store() or []
+        existing_ids = {
+            int(record["id"])
+            for record in records
+            if record.get("id") is not None and str(record.get("id")).lstrip("-").isdigit()
+        }
+        deleted_ids = [plant_id for plant_id in requested_ids if plant_id in existing_ids]
+        deleted_set = set(deleted_ids)
+        skipped = [
+            {"id": plant_id, "reason": "not_found"}
+            for plant_id in requested_ids
+            if plant_id not in existing_ids
+        ]
+
+        if deleted_set:
+            save_planted_plants_store([
+                record for record in records
+                if not (
+                    record.get("id") is not None
+                    and str(record.get("id")).lstrip("-").isdigit()
+                    and int(record["id"]) in deleted_set
+                )
+            ])
+
+        return {
+            "requested_count": len(requested_ids),
+            "deleted_count": len(deleted_ids),
+            "deleted_ids": deleted_ids,
+            "skipped": skipped,
+        }
+
+    @staticmethod
     def create_ngo_observation(data: Dict[str, Any], allow_nearby_duplicate: bool = False) -> Dict[str, Any]:
         lat, lng = float(data["latitude"]), float(data["longitude"])
         is_inside, auto_zone = validate_coordinates_location(lat, lng)
@@ -924,6 +959,49 @@ class DataService:
             return True
         except Exception:
             return False
+
+    @staticmethod
+    def bulk_delete_ngo_observations(obs_ids: List[int]) -> Dict[str, Any]:
+        """Delete selected NGO-owned observations in one write; never delete source iNaturalist records."""
+        requested_ids = list(dict.fromkeys(int(obs_id) for obs_id in obs_ids))
+        records = load_ngo_observations_store() or []
+        existing_ids = {
+            int(record["id"])
+            for record in records
+            if record.get("id") is not None and str(record.get("id")).lstrip("-").isdigit()
+        }
+
+        deleted_ids: List[int] = []
+        skipped: List[Dict[str, Any]] = []
+        for obs_id in requested_ids:
+            try:
+                DataService.protect_inaturalist_record(obs_id)
+            except PermissionError:
+                skipped.append({"id": obs_id, "reason": "read_only_inaturalist"})
+                continue
+
+            if obs_id not in existing_ids:
+                skipped.append({"id": obs_id, "reason": "not_found_or_not_ngo_owned"})
+                continue
+            deleted_ids.append(obs_id)
+
+        deleted_set = set(deleted_ids)
+        if deleted_set:
+            save_ngo_observations_store([
+                record for record in records
+                if not (
+                    record.get("id") is not None
+                    and str(record.get("id")).lstrip("-").isdigit()
+                    and int(record["id"]) in deleted_set
+                )
+            ])
+
+        return {
+            "requested_count": len(requested_ids),
+            "deleted_count": len(deleted_ids),
+            "deleted_ids": deleted_ids,
+            "skipped": skipped,
+        }
 
     @staticmethod
     def update_ngo_observation(obs_id: int, update_data: Dict[str, Any]) -> Dict[str, Any]:
