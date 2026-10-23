@@ -1238,6 +1238,7 @@ const App = {
                     <td>${this.zoneLabel(p.zone_code)}</td>
                     <td><span class="status-badge ${this.esc(stClass)}">${this.esc(p.status)}</span></td>
                     <td class="cell-actions">
+                        <button class="btn-action info" onclick="App.openPlantedPlantDetail(${Number(p.id)})" title="View plant photo and full record details">🔍 Details</button>
                         <button class="btn-action info" onclick="App.openPlantHistoryModal(${Number(p.id)}, ${codeArg})" title="See all health-check visits">📋 History</button>
                         <button class="btn-action success" onclick="App.openMonitoringModal(${Number(p.id)}, ${codeArg})" title="Record a health-check visit">➕ Visit</button>
                         <button class="btn-action" onclick="App.openEditPlantModal(${Number(p.id)})">Edit</button>
