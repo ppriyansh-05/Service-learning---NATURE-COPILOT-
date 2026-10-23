@@ -1090,6 +1090,7 @@ const App = {
                 this.closeObservationDetail();
             }
             this.obsSelectedIds.clear();
+            this.obsPage = 1;
             const skippedCount = ((result && result.skipped) || []).length;
             this.notify(
                 "Deleted " + deletedIds.length + " observation(s)." +
@@ -1299,6 +1300,7 @@ const App = {
             const result = await ApiService.bulkDeletePlantedPlants(selectedIds);
             const deletedIds = (result && result.deleted_ids) || [];
             this.plantedSelectedIds.clear();
+            this.plantedPage = 1;
             const skippedCount = ((result && result.skipped) || []).length;
             this.notify(
                 "Deleted " + deletedIds.length + " planted-plant record(s)." +
