@@ -19,7 +19,10 @@ const App = {
     obsPage: 1,
     obsLimit: 15,
     obsFilters: { source: "", zone: "", quality_grade: "", species: "" },
-    
+    obsSelectedIds: new Set(),
+    obsVisibleIds: [],
+    obsDeletableVisibleIds: [],
+
     speciesPage: 1,
     speciesLimit: 15,
     speciesSearch: "",
@@ -27,6 +30,8 @@ const App = {
     plantedPage: 1,
     plantedLimit: 10,
     plantedFilters: { status: "", zone: "", species: "" },
+    plantedSelectedIds: new Set(),
+    plantedVisibleIds: [],
     editingPlantId: null,
 
     // Phase 15 Auth Callback Holder
@@ -977,21 +982,32 @@ const App = {
         const tbody = document.getElementById("obs-table-body");
         if (!tbody) return;
 
+        this.obsVisibleIds = (res.data || []).map(o => Number(o.id)).filter(Number.isFinite);
+        this.obsDeletableVisibleIds = (res.data || [])
+            .filter(o => o.source === "NGO / New Upload")
+            .map(o => Number(o.id))
+            .filter(Number.isFinite);
+
         if (res.data.length === 0) {
-            tbody.innerHTML = `<tr class="empty-row"><td colspan="10">No observations match the current filters.</td></tr>`;
+            tbody.innerHTML = `<tr class="empty-row"><td colspan="11">No observations match the current filters.</td></tr>`;
             document.getElementById("obs-page-info").textContent = "No results";
             document.getElementById("obs-prev-btn").disabled = true;
             document.getElementById("obs-next-btn").disabled = true;
+            this.updateObsBulkSelectionUI();
             return;
         }
 
         tbody.innerHTML = res.data.map(o => {
+            const deletable = o.source === "NGO / New Upload";
+            const selected = this.obsSelectedIds.has(Number(o.id));
+            const selection = `<input type="checkbox" class="obs-row-select" data-observation-id="${Number(o.id)}" aria-label="Select observation #${Number(o.id)}" ${selected ? "checked" : ""} ${deletable ? "" : "disabled"} title="${deletable ? "Select this RSWF field observation" : "Only RSWF field observations can be deleted; reference records are protected"}" onclick="event.stopPropagation()" onchange="App.toggleObsSelection(${Number(o.id)}, this.checked)">`;
             const photo = o.photo_url && o.source === "NGO / New Upload" ? this.thumbSrc(o.photo_url) : "";
             const thumb = photo
                 ? `<img class="obs-thumb" src="${this.esc(photo)}" alt="" loading="lazy" onerror="App.replaceMissingPhoto(this, 'obs-thumb-empty', '–')">`
                 : `<div class="obs-thumb-empty" title="${o.observation_url ? "Photo on iNaturalist" : "No photo"}">${o.observation_url ? "↗" : "–"}</div>`;
             return `
             <tr class="row-clickable" tabindex="0" onclick="App.openObservationDetail(${Number(o.id)})" onkeydown="if(event.key==='Enter')App.openObservationDetail(${Number(o.id)})" title="View details">
+                <td>${selection}</td>
                 <td class="faint">${o.id}</td>
                 <td>${thumb}</td>
                 <td>${o.scientific_name ? `<b><i>${this.esc(o.scientific_name)}</i></b>` : '<span class="muted">Not identified yet</span>'}</td>
@@ -1008,6 +1024,85 @@ const App = {
         document.getElementById("obs-page-info").textContent = `Page ${res.page} of ${res.total_pages} · ${res.total_records} observations`;
         document.getElementById("obs-prev-btn").disabled = res.page <= 1;
         document.getElementById("obs-next-btn").disabled = res.page >= res.total_pages;
+        this.updateObsBulkSelectionUI();
+    },
+
+    updateObsBulkSelectionUI() {
+        const count = this.obsSelectedIds.size;
+        const label = document.getElementById("obs-selected-count");
+        const clearButton = document.getElementById("obs-clear-selection-btn");
+        const deleteButton = document.getElementById("obs-bulk-delete-btn");
+        const pageCheckbox = document.getElementById("obs-select-page");
+        if (label) label.textContent = count + " selected across pages";
+        if (clearButton) clearButton.disabled = count === 0;
+        if (deleteButton) deleteButton.disabled = count === 0;
+
+        document.querySelectorAll(".obs-row-select").forEach(input => {
+            const id = Number(input.dataset.observationId);
+            input.checked = this.obsSelectedIds.has(id);
+        });
+
+        if (pageCheckbox) {
+            const eligible = this.obsDeletableVisibleIds || [];
+            const selected = eligible.filter(id => this.obsSelectedIds.has(id)).length;
+            pageCheckbox.checked = eligible.length > 0 && selected === eligible.length;
+            pageCheckbox.indeterminate = selected > 0 && selected < eligible.length;
+            pageCheckbox.disabled = eligible.length === 0;
+        }
+    },
+
+    toggleObsSelection(obsId, checked) {
+        const id = Number(obsId);
+        if (!Number.isInteger(id)) return;
+        if (checked) this.obsSelectedIds.add(id);
+        else this.obsSelectedIds.delete(id);
+        this.updateObsBulkSelectionUI();
+    },
+
+    toggleObsPageSelection(checked) {
+        (this.obsDeletableVisibleIds || []).forEach(id => {
+            if (checked) this.obsSelectedIds.add(id);
+            else this.obsSelectedIds.delete(id);
+        });
+        this.updateObsBulkSelectionUI();
+    },
+
+    clearObsSelection() {
+        this.obsSelectedIds.clear();
+        this.updateObsBulkSelectionUI();
+    },
+
+    deleteSelectedObservations() {
+        if (!this.obsSelectedIds.size) return;
+        const ids = Array.from(this.obsSelectedIds);
+        this.requireAuth(() => this._doBulkDeleteObservations(ids));
+    },
+
+    async _doBulkDeleteObservations(ids) {
+        const selectedIds = Array.from(new Set((ids || []).map(Number).filter(Number.isInteger)));
+        if (!selectedIds.length) return;
+        if (!confirm("Delete " + selectedIds.length + " selected RSWF field observation(s) from Nature Copilot? Public iNaturalist reference records cannot be deleted. This action does not remove planted-plant records or observations already published on iNaturalist.")) return;
+
+        try {
+            const result = await ApiService.bulkDeleteObservations(selectedIds);
+            const deletedIds = (result && result.deleted_ids) || [];
+            if (this.currentDetailObs && deletedIds.includes(Number(this.currentDetailObs.id))) {
+                this.closeObservationDetail();
+            }
+            this.obsSelectedIds.clear();
+            const skippedCount = ((result && result.skipped) || []).length;
+            this.notify(
+                "Deleted " + deletedIds.length + " observation(s)." +
+                (skippedCount ? " Skipped " + skippedCount + " protected or missing record(s)." : ""),
+                skippedCount ? "warning" : "success",
+                7000
+            );
+            await this.loadObservations();
+            await this.loadOverview();
+            if (this.map) await this.loadMapData();
+        } catch (err) {
+            this.notify("Could not bulk-delete observations: " + err.message, "error", 7000);
+        }
     },
 
     changeObsPage(delta) {
@@ -1018,6 +1113,7 @@ const App = {
     applyObsFilter(field, value) {
         this.obsFilters[field] = value;
         this.obsPage = 1;
+        this.clearObsSelection();
         this.loadObservations();
     },
 
@@ -1101,20 +1197,26 @@ const App = {
         const tbody = document.getElementById("planted-table-body");
         if (!tbody) return;
 
+        this.plantedVisibleIds = (res.data || []).map(p => Number(p.id)).filter(Number.isFinite);
+
         if (res.data.length === 0) {
-            tbody.innerHTML = `<tr class="empty-row"><td colspan="7">No planted plants match. Use <b>Add Planted Plant</b> to register a new plantation record.</td></tr>`;
+            tbody.innerHTML = `<tr class="empty-row"><td colspan="8">No planted plants match. Use <b>Add Planted Plant</b> to register a new plantation record.</td></tr>`;
             document.getElementById("planted-page-info").textContent = "No results";
             document.getElementById("planted-prev-btn").disabled = true;
             document.getElementById("planted-next-btn").disabled = true;
+            this.updatePlantedBulkSelectionUI();
             return;
         }
 
         tbody.innerHTML = res.data.map(p => {
             const stClass = (p.status || "unknown").toLowerCase();
+            const selected = this.plantedSelectedIds.has(Number(p.id));
+            const selection = `<input type="checkbox" class="planted-row-select" data-plant-id="${Number(p.id)}" aria-label="Select planted plant ${this.esc(p.plant_code || p.id)}" ${selected ? "checked" : ""} onclick="event.stopPropagation()" onchange="App.togglePlantedSelection(${Number(p.id)}, this.checked)">`;
             // Plant codes are passed to handlers as JSON strings so quotes in codes cannot break the markup
             const codeArg = this.esc(JSON.stringify(p.plant_code || ""));
             return `
                 <tr>
+                    <td>${selection}</td>
                     <td><b>${this.esc(p.plant_code)}</b></td>
                     <td>${p.scientific_name ? `<b><i>${this.esc(p.scientific_name)}</i></b>` : '<span class="muted">Not specified</span>'}</td>
                     <td>${p.common_name ? this.esc(p.common_name) : '<span class="faint">—</span>'}</td>
@@ -1134,6 +1236,83 @@ const App = {
         document.getElementById("planted-page-info").textContent = `Page ${res.page} of ${res.total_pages} · ${res.total_records} planted plants`;
         document.getElementById("planted-prev-btn").disabled = res.page <= 1;
         document.getElementById("planted-next-btn").disabled = res.page >= res.total_pages;
+        this.updatePlantedBulkSelectionUI();
+    },
+
+    updatePlantedBulkSelectionUI() {
+        const count = this.plantedSelectedIds.size;
+        const label = document.getElementById("planted-selected-count");
+        const clearButton = document.getElementById("planted-clear-selection-btn");
+        const deleteButton = document.getElementById("planted-bulk-delete-btn");
+        const pageCheckbox = document.getElementById("planted-select-page");
+        if (label) label.textContent = count + " plant(s) selected across pages";
+        if (clearButton) clearButton.disabled = count === 0;
+        if (deleteButton) deleteButton.disabled = count === 0;
+
+        document.querySelectorAll(".planted-row-select").forEach(input => {
+            const id = Number(input.dataset.plantId);
+            input.checked = this.plantedSelectedIds.has(id);
+        });
+
+        if (pageCheckbox) {
+            const visible = this.plantedVisibleIds || [];
+            const selected = visible.filter(id => this.plantedSelectedIds.has(id)).length;
+            pageCheckbox.checked = visible.length > 0 && selected === visible.length;
+            pageCheckbox.indeterminate = selected > 0 && selected < visible.length;
+            pageCheckbox.disabled = visible.length === 0;
+        }
+    },
+
+    togglePlantedSelection(plantId, checked) {
+        const id = Number(plantId);
+        if (!Number.isInteger(id)) return;
+        if (checked) this.plantedSelectedIds.add(id);
+        else this.plantedSelectedIds.delete(id);
+        this.updatePlantedBulkSelectionUI();
+    },
+
+    togglePlantedPageSelection(checked) {
+        (this.plantedVisibleIds || []).forEach(id => {
+            if (checked) this.plantedSelectedIds.add(id);
+            else this.plantedSelectedIds.delete(id);
+        });
+        this.updatePlantedBulkSelectionUI();
+    },
+
+    clearPlantedSelection() {
+        this.plantedSelectedIds.clear();
+        this.updatePlantedBulkSelectionUI();
+    },
+
+    deleteSelectedPlantedPlants() {
+        if (!this.plantedSelectedIds.size) return;
+        const ids = Array.from(this.plantedSelectedIds);
+        this.requireAuth(() => this._doBulkDeletePlantedPlants(ids));
+    },
+
+    async _doBulkDeletePlantedPlants(ids) {
+        const selectedIds = Array.from(new Set((ids || []).map(Number).filter(Number.isInteger)));
+        if (!selectedIds.length) return;
+        if (!confirm("Delete " + selectedIds.length + " selected planted-plant record(s) from the Nature Copilot database? Observation records and published iNaturalist observations will not be deleted. This action cannot be undone.")) return;
+
+        try {
+            const result = await ApiService.bulkDeletePlantedPlants(selectedIds);
+            const deletedIds = (result && result.deleted_ids) || [];
+            this.plantedSelectedIds.clear();
+            const skippedCount = ((result && result.skipped) || []).length;
+            this.notify(
+                "Deleted " + deletedIds.length + " planted-plant record(s)." +
+                (skippedCount ? " Skipped " + skippedCount + " missing record(s)." : ""),
+                skippedCount ? "warning" : "success",
+                7000
+            );
+            await this.loadPlantedPlants();
+            await this.loadOverview();
+            await this.loadWateringQueue();
+            if (this.map) await this.loadMapData();
+        } catch (err) {
+            this.notify("Could not bulk-delete planted plants: " + err.message, "error", 7000);
+        }
     },
 
     changePlantedPage(delta) {
@@ -1144,6 +1323,7 @@ const App = {
     applyPlantedFilter(field, value) {
         this.plantedFilters[field] = value;
         this.plantedPage = 1;
+        this.clearPlantedSelection();
         this.loadPlantedPlants();
     },
 
