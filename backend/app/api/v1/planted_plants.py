@@ -5,7 +5,8 @@ Protected mutation operations require RSWF NGO Administrative Password verificat
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from typing import Optional
+from typing import List, Optional
+from pydantic import BaseModel, Field
 from app.schemas.schemas import (
     PlantedPlantCreate, PlantedPlantUpdate, PlantedPlantResponse, PaginatedPlantedPlantsResponse,
     PlantMonitoringCreate, PlantMonitoringResponse
@@ -15,6 +16,11 @@ from app.services import watering_service
 from app.core.security import verify_ngo_admin_password
 
 router = APIRouter(prefix="/planted-plants", tags=["Planted Plants CRUD"])
+
+class BulkDeletePlantedPlantsRequest(BaseModel):
+    ids: List[int] = Field(..., min_length=1, max_length=200)
+
+
 
 @router.get("/monitoring/statistics")
 def get_plant_survival_statistics():
@@ -103,6 +109,15 @@ def get_planted_plants(
         total_pages=total_pages,
         data=data
     )
+
+@router.post("/bulk-delete", status_code=status.HTTP_200_OK)
+def bulk_delete_planted_plants(
+    payload: BulkDeletePlantedPlantsRequest,
+    auth: str = Depends(verify_ngo_admin_password),
+):
+    """Delete selected managed plant records without cascading into observation data."""
+    return DataService.bulk_delete_planted_plants(payload.ids)
+
 
 @router.post("/{id}/monitoring", status_code=status.HTTP_201_CREATED)
 def add_plant_monitoring_visit(
