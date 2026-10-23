@@ -3291,7 +3291,9 @@ Status: ${c.status}`;
         const list = document.getElementById("inat-queue-list");
         const selectBar = document.getElementById("inat-select-bar");
         const reviewBtn = document.getElementById("btn-review-inat");
+        const filterBar = document.getElementById("inat-queue-filters");
         if (!empty || !list) return;
+        if (filterBar) filterBar.style.display = "none";
         empty.style.display = "block";
         empty.innerHTML = `<div class="muted">Loading…</div>`;
         list.innerHTML = "";
@@ -3328,6 +3330,7 @@ Status: ${c.status}`;
                 return;
             }
             empty.style.display = "none";
+            if (filterBar) filterBar.style.display = "flex";
             if (selectBar) selectBar.style.display = "flex";
             list.innerHTML = `
                 <div class="table-scroll">
@@ -3345,7 +3348,7 @@ Status: ${c.status}`;
                     <tbody id="inat-queue-tbody">${items.map((o, i) => this._inatQueueRow(o, i)).join("")}</tbody>
                 </table>
                 </div>`;
-            this._updateInatSelectedCount();
+            this.applyInatQueueFilters();
         } catch (e) {
             empty.style.display = "block";
             empty.innerHTML = `<div class="muted">Could not load the iNaturalist queue: ${this.esc(e.message)}</div>`;
@@ -3459,7 +3462,7 @@ Status: ${c.status}`;
             : uploadState === "publishing"
                 ? "This record is currently publishing"
                 : "NGO verification is required before publishing";
-        return `<tr id="inat-row-${i}">
+        return `<tr id="inat-row-${i}" data-zone="${this.esc(String(o.zone || "").toUpperCase())}" data-observed-on="${this.esc(o.observed_on || "")}" data-record-id="${Number(o.id)}">
             <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" ${selectDisabled ? `disabled title="${selectTitle}"` : ""} onchange="App._updateInatSelectedCount()"></td>
             <td>${photo}</td>
             <td style="font-size:0.82rem">${this.esc(o.scientific_name || '—')}<br><span class="muted">${this.esc(o.common_name || '')}</span></td>
@@ -3481,20 +3484,58 @@ Status: ${c.status}`;
         </tr>`;
     },
 
+    // Apply zone and observation-date ordering without refetching the queue.
+    // Sorting table rows keeps each action attached to its original observation ID.
+    applyInatQueueFilters() {
+        const tbody = document.getElementById("inat-queue-tbody");
+        if (!tbody) return;
+        const zoneFilter = (document.getElementById("inat-zone-filter") || {}).value || "";
+        const sortOrder = (document.getElementById("inat-date-sort") || {}).value || "newest";
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+        const knownZones = new Set(["ZONE A", "ZONE B", "ZONE C"]);
+        rows.sort((a, b) => {
+            const rawA = a.dataset.observedOn || "", rawB = b.dataset.observedOn || "";
+            const timeA = rawA ? Date.parse(rawA) : NaN, timeB = rawB ? Date.parse(rawB) : NaN;
+            const validA = Number.isFinite(timeA), validB = Number.isFinite(timeB);
+            // Keep undated records at the bottom for either ordering.
+            if (validA !== validB) return validA ? -1 : 1;
+            const idA = Number(a.dataset.recordId) || 0, idB = Number(b.dataset.recordId) || 0;
+            if (!validA && !validB) return sortOrder === "oldest" ? idA - idB : idB - idA;
+            const byDate = timeA - timeB;
+            if (byDate !== 0) return sortOrder === "oldest" ? byDate : -byDate;
+            return sortOrder === "oldest" ? idA - idB : idB - idA;
+        });
+        let visibleCount = 0;
+        rows.forEach(row => {
+            tbody.appendChild(row);
+            const zone = (row.dataset.zone || "").trim().toUpperCase();
+            const matchesZone = !zoneFilter || (zoneFilter === "outside" ? !knownZones.has(zone) : zone === zoneFilter);
+            row.style.display = matchesZone ? "" : "none";
+            if (matchesZone) visibleCount++;
+        });
+        const count = document.getElementById("inat-queue-filter-count");
+        if (count) count.textContent = `Showing ${visibleCount} of ${rows.length} records`;
+        this._updateInatSelectedCount();
+    },
+
     _updateInatSelectedCount() {
-        const cbs = document.querySelectorAll(".inat-select-cb:checked:not(:disabled)");
+        const cbs = Array.from(document.querySelectorAll(".inat-select-cb:checked:not(:disabled)"));
         const el = document.getElementById("inat-selected-count");
         if (el) el.textContent = `${cbs.length} selected`;
         const allCb = document.getElementById("inat-select-all");
-        const totalCbs = document.querySelectorAll(".inat-select-cb:not(:disabled)");
-        if (allCb) allCb.indeterminate = cbs.length > 0 && cbs.length < totalCbs.length;
-        if (allCb) allCb.checked = totalCbs.length > 0 && cbs.length === totalCbs.length;
+        const visibleCbs = Array.from(document.querySelectorAll(".inat-select-cb:not(:disabled)"))
+            .filter(cb => cb.closest("tr")?.style.display !== "none");
+        const selectedVisible = visibleCbs.filter(cb => cb.checked).length;
+        if (allCb) allCb.indeterminate = selectedVisible > 0 && selectedVisible < visibleCbs.length;
+        if (allCb) allCb.checked = visibleCbs.length > 0 && selectedVisible === visibleCbs.length;
         const reviewBtn = document.getElementById("btn-review-inat");
         if (reviewBtn) reviewBtn.style.display = cbs.length > 0 ? "inline-block" : "none";
     },
 
     inatToggleSelectAll(checked) {
-        document.querySelectorAll(".inat-select-cb:not(:disabled)").forEach(cb => cb.checked = checked);
+        Array.from(document.querySelectorAll(".inat-select-cb:not(:disabled)"))
+            .filter(cb => cb.closest("tr")?.style.display !== "none")
+            .forEach(cb => cb.checked = checked);
         this._updateInatSelectedCount();
     },
 

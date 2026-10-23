@@ -464,9 +464,30 @@
                 <div id="inat-upload-progress" class="muted" style="margin-top:0.75rem" aria-live="polite"></div>
             </div>
 
+            <div id="inat-queue-filters" class="controls-bar" style="display:none;margin-bottom:0.75rem;align-items:flex-end;gap:0.75rem;flex-wrap:wrap">
+                <label style="display:flex;flex-direction:column;gap:0.3rem;font-size:0.8rem;color:var(--v-text-secondary)">
+                    Filter by zone
+                    <select id="inat-zone-filter" class="select-input" aria-label="Filter iNaturalist upload queue by zone" onchange="App.applyInatQueueFilters()">
+                        <option value="">All zones</option>
+                        <option value="ZONE A">Zone A</option>
+                        <option value="ZONE B">Zone B</option>
+                        <option value="ZONE C">Zone C</option>
+                        <option value="outside">Outside zones / Unassigned</option>
+                    </select>
+                </label>
+                <label style="display:flex;flex-direction:column;gap:0.3rem;font-size:0.8rem;color:var(--v-text-secondary)">
+                    Order by observation date
+                    <select id="inat-date-sort" class="select-input" aria-label="Sort iNaturalist upload queue by observation date" onchange="App.applyInatQueueFilters()">
+                        <option value="newest" selected>New to old (newest first)</option>
+                        <option value="oldest">Old to new (oldest first)</option>
+                    </select>
+                </label>
+                <span id="inat-queue-filter-count" class="muted" style="font-size:0.82rem;padding-bottom:0.55rem">Showing records</span>
+            </div>
+
             <div id="inat-select-bar" style="display:none; margin-bottom:0.75rem; align-items:center; gap:0.75rem; flex-wrap:wrap">
                 <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.85rem">
-                    <input type="checkbox" id="inat-select-all" onchange="App.inatToggleSelectAll(this.checked)"> Select all eligible records
+                    <input type="checkbox" id="inat-select-all" onchange="App.inatToggleSelectAll(this.checked)"> Select all eligible records in this view
                 </label>
                 <span id="inat-selected-count" class="muted" style="font-size:0.82rem">0 selected</span>
             </div>
@@ -1246,9 +1267,9 @@
 <script src="js/config.local.js" onerror="void 0"></script>
 
 <!-- Frontend JavaScript Modules -->
-<script src="js/config.js?v=v2026.10.24-custom-species1"></script>
-<script src="js/api.js?v=v2026.10.24-custom-species1"></script>
-<script src="js/app.js?v=v2026.10.24-custom-species1"></script>
+<script src="js/config.js?v=v2026.10.24-inat-filters1"></script>
+<script src="js/api.js?v=v2026.10.24-inat-filters1"></script>
+<script src="js/app.js?v=v2026.10.24-inat-filters1"></script>
 
 </body>
 </html>
