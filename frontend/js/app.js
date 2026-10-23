@@ -1829,6 +1829,7 @@ const App = {
             "geotag-confirmation-box",
             "upload-ai-trigger-container",
             "ai-prediction-card",
+            "custom-species-form",
         ];
         hideIds.forEach(id => {
             const el = document.getElementById(id);
@@ -1884,6 +1885,17 @@ const App = {
         });
         const correctionType = document.getElementById("verif-correct-type");
         if (correctionType) correctionType.value = "sighted";
+        ["custom-species-scientific", "custom-species-common", "custom-species-notes"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = "";
+        });
+        const customType = document.getElementById("custom-species-type");
+        if (customType) customType.value = "sighted";
+        const customSaveButton = document.getElementById("btn-save-custom-species");
+        if (customSaveButton) {
+            customSaveButton.disabled = false;
+            customSaveButton.textContent = "Save & Confirm Species";
+        }
 
         const organ = document.getElementById("upload-organ-select");
         if (organ) organ.value = "auto";
@@ -1942,6 +1954,12 @@ const App = {
         const aiList = document.getElementById("ai-predictions-list");
         if (aiCard) aiCard.style.display = "none";
         if (aiList) aiList.replaceChildren();
+        const customForm = document.getElementById("custom-species-form");
+        if (customForm) customForm.style.display = "none";
+        ["custom-species-scientific", "custom-species-common", "custom-species-notes"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = "";
+        });
 
         // A second file may be chosen without closing the modal; remove every visual trace
         // of the previous result before processing the newly selected photo.
@@ -2371,6 +2389,93 @@ const App = {
         const ids = res.nearby_observation_ids || [];
         if (!ids.length) return "";
         return `<div style="margin-top:0.4rem;color:#fbbf24">⚠️ ${ids.length === 1 ? "Another observation exists" : "Other observations exist"} at the same location (${ids.map(id => "#" + id).join(", ")}). If this is the same plant, it may be a duplicate.</div>`;
+    },
+
+    // Let a knowledgeable uploader identify the plant without calling Pl@ntNet.
+    toggleCustomSpeciesForm(forceOpen = null) {
+        const form = document.getElementById("custom-species-form");
+        if (!form) return;
+        const shouldOpen = forceOpen === null ? form.style.display === "none" : !!forceOpen;
+        if (shouldOpen && !this.currentUploadedObsId) {
+            this.notify("Upload and save a photo first, then enter its species.", "warning");
+            return;
+        }
+        form.style.display = shouldOpen ? "block" : "none";
+        if (shouldOpen) {
+            const typeFromUpload = document.querySelector('input[name="upload-obs-type"]:checked')?.value;
+            const typeSelect = document.getElementById("custom-species-type");
+            if (typeSelect && ["sighted", "planted_rswf"].includes(typeFromUpload)) {
+                typeSelect.value = typeFromUpload;
+            }
+            const firstField = document.getElementById("custom-species-scientific");
+            if (firstField) firstField.focus();
+        }
+    },
+
+    submitCustomSpecies() {
+        const obsId = this.currentUploadedObsId;
+        const sessionId = this.uploadModalSession;
+        if (!obsId) {
+            this.notify("Upload and save a photo before confirming its species.", "warning");
+            return;
+        }
+        this.requireAuth(() => this._doSubmitCustomSpecies(obsId, sessionId));
+    },
+
+    async _doSubmitCustomSpecies(obsId, sessionId) {
+        if (!obsId || sessionId !== this.uploadModalSession || obsId !== this.currentUploadedObsId) {
+            this.notify("This upload session has changed. Please select the plant again.", "warning");
+            return;
+        }
+        const scientificName = document.getElementById("custom-species-scientific")?.value?.trim();
+        const commonName = document.getElementById("custom-species-common")?.value?.trim();
+        const observationType = document.getElementById("custom-species-type")?.value || "sighted";
+        const notes = document.getElementById("custom-species-notes")?.value?.trim();
+
+        if (!scientificName) {
+            this.notify("Enter the scientific name before confirming the species.", "warning");
+            document.getElementById("custom-species-scientific")?.focus();
+            return;
+        }
+        if (!["sighted", "planted_rswf"].includes(observationType)) {
+            this.notify("Choose whether this is a wild sighting or an RSWF-planted plant.", "warning");
+            return;
+        }
+
+        const saveButton = document.getElementById("btn-save-custom-species");
+        if (saveButton) {
+            saveButton.disabled = true;
+            saveButton.textContent = "Saving species…";
+        }
+
+        try {
+            // Keep the record type and human-confirmed name on the same NGO-owned observation.
+            await ApiService.updateObservation(obsId, { observation_type: observationType });
+            const result = await ApiService.verifyObservation(obsId, {
+                decision: "correct",
+                scientific_name: scientificName,
+                common_name: commonName || null,
+                notes: notes || "Species entered manually by the uploader."
+            });
+
+            if (sessionId !== this.uploadModalSession || obsId !== this.currentUploadedObsId) return;
+            this.notify("✅ Observation #" + obsId + " confirmed as " + (result.scientific_name || scientificName) + " without using Pl@ntNet.");
+            await this.loadObservations();
+            await this.loadOverview();
+            if (this.map) await this.loadMapData();
+            this.closeUploadPhotoModal();
+        } catch (err) {
+            if (sessionId !== this.uploadModalSession || obsId !== this.currentUploadedObsId) return;
+            this.notify("Could not save the manual species identification: " + err.message, "error", 7000);
+        } finally {
+            if (sessionId === this.uploadModalSession) {
+                const button = document.getElementById("btn-save-custom-species");
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = "Save & Confirm Species";
+                }
+            }
+        }
     },
 
     // =====================================================================

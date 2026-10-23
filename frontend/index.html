@@ -965,10 +965,45 @@
                     <button type="button" id="btn-confirm-location" class="btn-primary btn-amber btn-small" onclick="App.handleConfirmGeotagLocation()">Confirm Location</button>
                 </div>
 
-                <!-- Pl@ntNet Trigger Button inside Upload Card -->
+                <!-- Optional species identification: run AI or enter a known species manually -->
                 <div id="upload-ai-trigger-container" style="display:none;margin-top:1rem;padding-top:0.75rem;border-top:1px dashed var(--border-color);justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap">
-                    <span style="font-size:0.8rem;color:#94a3b8">Ready for AI identification?</span>
-                    <button type="button" id="btn-trigger-ai" class="btn-primary btn-small" onclick="App.triggerCurrentObsAI()">🤖 Run Pl@ntNet AI</button>
+                    <span style="font-size:0.8rem;color:#94a3b8">Identify this plant</span>
+                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                        <button type="button" id="btn-trigger-ai" class="btn-primary btn-small" onclick="App.triggerCurrentObsAI()">🤖 Run Pl@ntNet AI</button>
+                        <button type="button" id="btn-custom-species" class="btn-action" onclick="App.toggleCustomSpeciesForm()">✍️ Enter species manually</button>
+                    </div>
+                </div>
+
+                <div id="custom-species-form" style="display:none;margin-top:0.75rem;padding:0.9rem;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.25);border-radius:8px">
+                    <div style="font-weight:600;margin-bottom:0.75rem;color:#6ee7b7">Enter the plant name you already know</div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="custom-species-scientific">Scientific name <span class="req">*</span></label>
+                            <input type="text" id="custom-species-scientific" class="search-input" style="width:100%" placeholder="e.g. Azadirachta indica">
+                        </div>
+                        <div class="form-group">
+                            <label for="custom-species-common">Common name</label>
+                            <input type="text" id="custom-species-common" class="search-input" style="width:100%" placeholder="e.g. Neem">
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="custom-species-type">Record type</label>
+                            <select id="custom-species-type" class="select-input" style="width:100%">
+                                <option value="sighted">👁️ Sighted (wild)</option>
+                                <option value="planted_rswf">🌱 Planted by RSWF</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="custom-species-notes">Identification notes (optional)</label>
+                            <input type="text" id="custom-species-notes" class="search-input" style="width:100%" placeholder="How did you identify it?">
+                        </div>
+                    </div>
+                    <div class="form-hint" style="margin-bottom:0.75rem">This skips Pl@ntNet. Your species choice is still saved through the NGO verification workflow.</div>
+                    <div style="display:flex;justify-content:flex-end;gap:0.5rem;flex-wrap:wrap">
+                        <button type="button" class="btn-action" onclick="App.toggleCustomSpeciesForm(false)">Cancel</button>
+                        <button type="button" id="btn-save-custom-species" class="btn-primary btn-green btn-small" onclick="App.submitCustomSpecies()">Save &amp; Confirm Species</button>
+                    </div>
                 </div>
             </div>
 
@@ -1211,9 +1246,9 @@
 <script src="js/config.local.js" onerror="void 0"></script>
 
 <!-- Frontend JavaScript Modules -->
-<script src="js/config.js?v=v2026.10.24-upload-reset1"></script>
-<script src="js/api.js?v=v2026.10.24-upload-reset1"></script>
-<script src="js/app.js?v=v2026.10.24-upload-reset1"></script>
+<script src="js/config.js?v=v2026.10.24-custom-species1"></script>
+<script src="js/api.js?v=v2026.10.24-custom-species1"></script>
+<script src="js/app.js?v=v2026.10.24-custom-species1"></script>
 
 </body>
 </html>
