@@ -6,6 +6,7 @@ and provenance protection preventing modification of original iNaturalist record
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status, Response
+from pydantic import BaseModel, Field
 from typing import List as _List
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -16,6 +17,11 @@ from app.schemas.schemas import (
 from app.services.data_service import DataService, DuplicateObservationError
 
 router = APIRouter(prefix="/observations", tags=["Observations"])
+
+class BulkDeleteObservationsRequest(BaseModel):
+    ids: _List[int] = Field(..., min_length=1, max_length=200)
+
+
 
 @router.get("", response_model=PaginatedObservationsResponse)
 def get_observations(
@@ -312,6 +318,15 @@ def update_observation(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/bulk-delete", status_code=status.HTTP_200_OK)
+def bulk_delete_observations(
+    payload: BulkDeleteObservationsRequest,
+    auth: str = Depends(verify_ngo_admin_password),
+):
+    """Delete selected RSWF-owned observations. Public iNaturalist rows remain read-only."""
+    return DataService.bulk_delete_ngo_observations(payload.ids)
+
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_observation(
