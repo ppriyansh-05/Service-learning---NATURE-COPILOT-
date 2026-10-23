@@ -464,7 +464,7 @@
                 <div id="inat-upload-progress" class="muted" style="margin-top:0.75rem" aria-live="polite"></div>
             </div>
 
-            <div id="inat-queue-filters" class="controls-bar" style="display:none;margin-bottom:0.75rem;align-items:flex-end;gap:0.75rem;flex-wrap:wrap">
+            <div id="inat-queue-filters" class="controls-bar" style="display:flex;margin-bottom:0.75rem;align-items:flex-end;gap:0.75rem;flex-wrap:wrap" role="group" aria-label="iNaturalist upload queue filters">
                 <label style="display:flex;flex-direction:column;gap:0.3rem;font-size:0.8rem;color:var(--v-text-secondary)">
                     Filter by zone
                     <select id="inat-zone-filter" class="select-input" aria-label="Filter iNaturalist upload queue by zone" onchange="App.applyInatQueueFilters()">
@@ -476,10 +476,11 @@
                     </select>
                 </label>
                 <label style="display:flex;flex-direction:column;gap:0.3rem;font-size:0.8rem;color:var(--v-text-secondary)">
-                    Order by observation date
-                    <select id="inat-date-sort" class="select-input" aria-label="Sort iNaturalist upload queue by observation date" onchange="App.applyInatQueueFilters()">
-                        <option value="newest" selected>New to old (newest first)</option>
-                        <option value="oldest">Old to new (oldest first)</option>
+                    Sort records
+                    <select id="inat-date-sort" class="select-input" aria-label="Sort iNaturalist upload queue" onchange="App.applyInatQueueFilters()">
+                        <option value="recent" selected>Recently added (newest first)</option>
+                        <option value="newest">Observation date: new to old</option>
+                        <option value="oldest">Observation date: old to new</option>
                     </select>
                 </label>
                 <span id="inat-queue-filter-count" class="muted" style="font-size:0.82rem;padding-bottom:0.55rem">Showing records</span>
@@ -1267,9 +1268,9 @@
 <script src="js/config.local.js" onerror="void 0"></script>
 
 <!-- Frontend JavaScript Modules -->
-<script src="js/config.js?v=v2026.10.24-inat-filters1"></script>
-<script src="js/api.js?v=v2026.10.24-inat-filters1"></script>
-<script src="js/app.js?v=v2026.10.24-inat-filters1"></script>
+<script src="js/config.js?v=v2026.10.24-inat-filters2"></script>
+<script src="js/api.js?v=v2026.10.24-inat-filters2"></script>
+<script src="js/app.js?v=v2026.10.24-inat-filters2"></script>
 
 </body>
 </html>
