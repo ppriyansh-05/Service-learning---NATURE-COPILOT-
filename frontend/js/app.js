@@ -34,6 +34,12 @@ const App = {
     plantedVisibleIds: [],
     editingPlantId: null,
 
+    // Keep every single-photo upload isolated from the previous modal session.
+    currentUploadedObsId: null,
+    pendingGeotagData: null,
+    pendingGeotagAllowNearby: false,
+    uploadModalSession: 0,
+
     // Phase 15 Auth Callback Holder
     pendingAction: null,
 
@@ -1804,20 +1810,98 @@ const App = {
     // Phase 9 — Photo Upload & EXIF GPS Modal Handlers
     // =====================================================================
 
-    openUploadPhotoModal() {
-        document.getElementById("upload-photo-form").reset();
-        document.getElementById("upload-file-info").style.display = "none";
-        document.getElementById("upload-status-indicator").style.display = "none";
-        document.getElementById("upload-result-card").style.display = "none";
-        document.getElementById("upload-result-preview").style.display = "none";
-        // reset type selector to sighted
+    // Reset both the form and every piece of state that can target a previous observation.
+    // Incrementing the session invalidates any upload/AI response still in flight.
+    resetUploadPhotoState() {
+        this.uploadModalSession += 1;
+        this.currentUploadedObsId = null;
+        this.pendingGeotagData = null;
+        this.pendingGeotagAllowNearby = false;
+
+        const form = document.getElementById("upload-photo-form");
+        if (form) form.reset();
+
+        const hideIds = [
+            "upload-file-info",
+            "upload-status-indicator",
+            "upload-result-card",
+            "upload-result-preview",
+            "geotag-confirmation-box",
+            "upload-ai-trigger-container",
+            "ai-prediction-card",
+        ];
+        hideIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = "none";
+        });
+
+        const fileInfo = document.getElementById("upload-file-info");
+        if (fileInfo) fileInfo.textContent = "";
+
+        const resultTitle = document.getElementById("upload-result-title");
+        if (resultTitle) {
+            resultTitle.textContent = "✅ Photo Observation Created!";
+            resultTitle.style.color = "";
+        }
+        const resultCard = document.getElementById("upload-result-card");
+        if (resultCard) {
+            resultCard.style.background = "";
+            resultCard.style.borderColor = "";
+        }
+        const resultDetails = document.getElementById("upload-result-details");
+        if (resultDetails) resultDetails.replaceChildren();
+
+        const preview = document.getElementById("upload-result-preview");
+        if (preview) {
+            preview.removeAttribute("src");
+            preview.alt = "Uploaded photo preview";
+            preview.onerror = null;
+        }
+
+        const aiList = document.getElementById("ai-predictions-list");
+        if (aiList) aiList.replaceChildren();
+        const aiButton = document.getElementById("btn-trigger-ai");
+        if (aiButton) {
+            aiButton.disabled = false;
+            aiButton.textContent = "🤖 Run Pl@ntNet AI";
+        }
+        const submitButton = document.getElementById("btn-upload-submit");
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = "Upload & Check Location";
+        }
+        const confirmButton = document.getElementById("btn-confirm-location");
+        if (confirmButton) {
+            confirmButton.disabled = false;
+            confirmButton.textContent = "Confirm Location";
+        }
+
+        const correctionForm = document.getElementById("ai-correction-form");
+        if (correctionForm) correctionForm.style.display = "none";
+        ["verif-correct-sci", "verif-correct-com", "verif-correct-notes"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = "";
+        });
+        const correctionType = document.getElementById("verif-correct-type");
+        if (correctionType) correctionType.value = "sighted";
+
+        const organ = document.getElementById("upload-organ-select");
+        if (organ) organ.value = "auto";
         const sightedRadio = document.getElementById("upload-type-sighted");
-        if (sightedRadio) { sightedRadio.checked = true; this.onUploadTypeChange(); }
-        document.getElementById("upload-photo-modal").style.display = "flex";
+        if (sightedRadio) sightedRadio.checked = true;
+        this.onUploadTypeChange();
+    },
+
+    openUploadPhotoModal() {
+        this.resetUploadPhotoState();
+        const modal = document.getElementById("upload-photo-modal");
+        if (modal) modal.style.display = "flex";
     },
 
     closeUploadPhotoModal() {
-        document.getElementById("upload-photo-modal").style.display = "none";
+        const modal = document.getElementById("upload-photo-modal");
+        if (modal) modal.style.display = "none";
+        this.resetUploadPhotoState();
     },
 
     handlePhotoSelectionChanged(e) {
@@ -1850,6 +1934,51 @@ const App = {
 
     async handlePhotoUploadSubmit(e) {
         e.preventDefault();
+        const sessionId = this.uploadModalSession;
+        this.currentUploadedObsId = null;
+        this.pendingGeotagData = null;
+        this.pendingGeotagAllowNearby = false;
+        const aiCard = document.getElementById("ai-prediction-card");
+        const aiList = document.getElementById("ai-predictions-list");
+        if (aiCard) aiCard.style.display = "none";
+        if (aiList) aiList.replaceChildren();
+
+        // A second file may be chosen without closing the modal; remove every visual trace
+        // of the previous result before processing the newly selected photo.
+        const priorDetails = document.getElementById("upload-result-details");
+        if (priorDetails) priorDetails.replaceChildren();
+        const priorPreview = document.getElementById("upload-result-preview");
+        if (priorPreview) {
+            priorPreview.style.display = "none";
+            priorPreview.removeAttribute("src");
+            priorPreview.onerror = null;
+        }
+        const priorResultTitle = document.getElementById("upload-result-title");
+        if (priorResultTitle) {
+            priorResultTitle.textContent = "✅ Photo Observation Created!";
+            priorResultTitle.style.color = "";
+        }
+        const priorResultCard = document.getElementById("upload-result-card");
+        if (priorResultCard) {
+            priorResultCard.style.background = "";
+            priorResultCard.style.borderColor = "";
+            priorResultCard.style.display = "none";
+        }
+        const priorConfirmBox = document.getElementById("geotag-confirmation-box");
+        if (priorConfirmBox) priorConfirmBox.style.display = "none";
+        const priorAiTrigger = document.getElementById("upload-ai-trigger-container");
+        if (priorAiTrigger) priorAiTrigger.style.display = "none";
+        const aiButton = document.getElementById("btn-trigger-ai");
+        if (aiButton) {
+            aiButton.disabled = false;
+            aiButton.textContent = "🤖 Run Pl@ntNet AI";
+        }
+        const confirmButton = document.getElementById("btn-confirm-location");
+        if (confirmButton) {
+            confirmButton.disabled = false;
+            confirmButton.textContent = "Confirm Location";
+        }
+
         const fileInput = document.getElementById("upload-photo-file");
         if (!fileInput.files || fileInput.files.length === 0) {
             this.notify("Please choose a photo to upload first.", "warning");
@@ -1875,6 +2004,7 @@ const App = {
 
         try {
             const res = await ApiService.uploadPhotoObservation(file, { obsType });
+            if (sessionId !== this.uploadModalSession) return;
             statusInd.style.display = "none";
             submitBtn.disabled = false;
 
@@ -1955,6 +2085,7 @@ const App = {
             resultCard.style.display = "block";
 
         } catch (err) {
+            if (sessionId !== this.uploadModalSession) return;
             statusInd.style.display = "none";
             submitBtn.disabled = false;
 
@@ -1982,6 +2113,7 @@ const App = {
     },
 
     async handleConfirmGeotagLocation() {
+        const sessionId = this.uploadModalSession;
         if (!this.pendingGeotagData) {
             this.notify("There is no location waiting to be confirmed.", "warning");
             return;
@@ -2011,6 +2143,7 @@ const App = {
                 !!this.pendingGeotagAllowNearby,
                 data.observation_type || "sighted",
             );
+            if (sessionId !== this.uploadModalSession) return;
             this.pendingGeotagAllowNearby = false;
 
             this.currentUploadedObsId = res.observation_id;
@@ -2047,6 +2180,7 @@ const App = {
             if (this.map) await this.loadMapData();
 
         } catch (err) {
+            if (sessionId !== this.uploadModalSession) return;
             if (confirmBtn) {
                 confirmBtn.disabled = false;
                 confirmBtn.textContent = "Confirm Location";
@@ -2149,6 +2283,14 @@ const App = {
     // Retries the upload with allow_nearby_duplicate=true so the backend records it as a new
     // plant even though it sits within the 0.15-metre same-plant guard.
     async recordNearbyAnyway() {
+        const sessionId = this.uploadModalSession;
+        this.currentUploadedObsId = null;
+        this.pendingGeotagData = null;
+        this.pendingGeotagAllowNearby = false;
+        const aiCard = document.getElementById("ai-prediction-card");
+        const aiList = document.getElementById("ai-predictions-list");
+        if (aiCard) aiCard.style.display = "none";
+        if (aiList) aiList.replaceChildren();
         const fileInput = document.getElementById("upload-photo-file");
         if (!fileInput || !fileInput.files || !fileInput.files.length) {
             this.notify("Please pick the photo again — the file was cleared.", "warning");
@@ -2165,6 +2307,7 @@ const App = {
 
         try {
             const res = await ApiService.uploadPhotoObservation(file, { allowNearbyDuplicate: true, obsType });
+            if (sessionId !== this.uploadModalSession) return;
             if (res.photo_url) {
                 const fullPhotoUrl = window.APP_CONFIG.getEndpoint(res.photo_url);
                 resultPreview.src = fullPhotoUrl;
@@ -2218,6 +2361,7 @@ const App = {
             await this.loadOverview();
             if (this.map) await this.loadMapData();
         } catch (err) {
+            if (sessionId !== this.uploadModalSession) return;
             this.notify(`Could not save: ${err.message}`, "error", 7000);
         }
     },
@@ -2234,7 +2378,9 @@ const App = {
     // =====================================================================
 
     async triggerCurrentObsAI() {
-        if (!this.currentUploadedObsId) {
+        const obsId = this.currentUploadedObsId;
+        const sessionId = this.uploadModalSession;
+        if (!obsId) {
             this.notify("Upload a photo first, then run the AI identification.", "warning");
             return;
         }
@@ -2250,7 +2396,8 @@ const App = {
         aiList.innerHTML = `<div style="color:#a78bfa;font-size:0.85rem">Contacting Pl@ntNet REST API service...</div>`;
 
         try {
-            const res = await ApiService.identifyObservationPlant(this.currentUploadedObsId, organ);
+            const res = await ApiService.identifyObservationPlant(obsId, organ);
+            if (sessionId !== this.uploadModalSession || this.currentUploadedObsId !== obsId) return;
             btnTrigger.disabled = false;
             btnTrigger.textContent = "🤖 Re-run Pl@ntNet AI";
 
@@ -2289,7 +2436,7 @@ const App = {
 
                         <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:0.6rem">
                             <button type="button" class="btn-action" style="font-size:0.75rem;padding:0.25rem 0.5rem;background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.4)" 
-                                onclick="App.confirmAiPredictionRank(${this.currentUploadedObsId}, ${p.rank})">
+                                onclick="App.confirmAiPredictionRank(${obsId}, ${p.rank})">
                                 ✅ Confirm #${p.rank} (${p.scientific_name})
                             </button>
                         </div>
@@ -2303,7 +2450,7 @@ const App = {
                     <button type="button" class="btn-action" style="flex:1;font-size:0.8rem;background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.4)" onclick="App.toggleCorrectionForm()">
                         ✏️ Correct Identification
                     </button>
-                    <button type="button" class="btn-action" style="flex:1;font-size:0.8rem;background:rgba(245,158,11,0.2);color:#fbbf24;border:1px solid rgba(245,158,11,0.4)" onclick="App.markNeedsReview(${this.currentUploadedObsId})">
+                    <button type="button" class="btn-action" style="flex:1;font-size:0.8rem;background:rgba(245,158,11,0.2);color:#fbbf24;border:1px solid rgba(245,158,11,0.4)" onclick="App.markNeedsReview(${obsId})">
                         ❓ Needs Expert Review
                     </button>
                 </div>
@@ -2332,6 +2479,7 @@ const App = {
             aiList.innerHTML = html;
 
         } catch (err) {
+            if (sessionId !== this.uploadModalSession || this.currentUploadedObsId !== obsId) return;
             btnTrigger.disabled = false;
             btnTrigger.textContent = "🤖 Run Pl@ntNet AI";
             aiList.innerHTML = `<div style="color:#f87171;padding:0.5rem">❌ AI Identification Error: ${err.message}</div>`;
