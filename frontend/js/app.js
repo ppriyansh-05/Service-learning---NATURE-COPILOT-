@@ -1942,6 +1942,43 @@ const App = {
         const aiList = document.getElementById("ai-predictions-list");
         if (aiCard) aiCard.style.display = "none";
         if (aiList) aiList.replaceChildren();
+
+        // A second file may be chosen without closing the modal; remove every visual trace
+        // of the previous result before processing the newly selected photo.
+        const priorDetails = document.getElementById("upload-result-details");
+        if (priorDetails) priorDetails.replaceChildren();
+        const priorPreview = document.getElementById("upload-result-preview");
+        if (priorPreview) {
+            priorPreview.style.display = "none";
+            priorPreview.removeAttribute("src");
+            priorPreview.onerror = null;
+        }
+        const priorResultTitle = document.getElementById("upload-result-title");
+        if (priorResultTitle) {
+            priorResultTitle.textContent = "✅ Photo Observation Created!";
+            priorResultTitle.style.color = "";
+        }
+        const priorResultCard = document.getElementById("upload-result-card");
+        if (priorResultCard) {
+            priorResultCard.style.background = "";
+            priorResultCard.style.borderColor = "";
+            priorResultCard.style.display = "none";
+        }
+        const priorConfirmBox = document.getElementById("geotag-confirmation-box");
+        if (priorConfirmBox) priorConfirmBox.style.display = "none";
+        const priorAiTrigger = document.getElementById("upload-ai-trigger-container");
+        if (priorAiTrigger) priorAiTrigger.style.display = "none";
+        const aiButton = document.getElementById("btn-trigger-ai");
+        if (aiButton) {
+            aiButton.disabled = false;
+            aiButton.textContent = "🤖 Run Pl@ntNet AI";
+        }
+        const confirmButton = document.getElementById("btn-confirm-location");
+        if (confirmButton) {
+            confirmButton.disabled = false;
+            confirmButton.textContent = "Confirm Location";
+        }
+
         const fileInput = document.getElementById("upload-photo-file");
         if (!fileInput.files || fileInput.files.length === 0) {
             this.notify("Please choose a photo to upload first.", "warning");
