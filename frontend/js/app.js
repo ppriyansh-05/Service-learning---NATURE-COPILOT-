@@ -2734,6 +2734,89 @@ const App = {
         this.currentDetailPlant = null;
     },
 
+    renderPlantedPlantDetail(p, history = []) {
+        const body = document.getElementById("obs-detail-body");
+        if (!body) return;
+
+        const plantId = Number(p.id);
+        const plantCode = p.plant_code || `Plant #${plantId}`;
+        const codeArg = this.esc(JSON.stringify(plantCode));
+        const photo = p.photo_url ? this.photoSrc(p.photo_url) : "";
+        const photoHtml = photo
+            ? `<a href="${this.esc(photo)}" target="_blank" rel="noopener" title="Open full-size plant photo"><img class="detail-photo" src="${this.esc(photo)}" alt="Photo of ${this.esc(p.common_name || plantCode)}" onerror="App.replaceMissingPhoto(this.parentElement, 'detail-photo-empty', 'Plant photo file is missing')"></a>`
+            : `<div class="detail-photo-empty">No photo attached to this plant record yet. Use Edit to add a photo URL.</div>`;
+
+        const hasCoords = p.latitude !== null && p.latitude !== undefined &&
+            p.longitude !== null && p.longitude !== undefined &&
+            Number.isFinite(Number(p.latitude)) && Number.isFinite(Number(p.longitude));
+        const lat = hasCoords ? Number(p.latitude).toFixed(6) : "";
+        const lng = hasCoords ? Number(p.longitude).toFixed(6) : "";
+        const mapsUrl = hasCoords
+            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lat + ", " + lng)}`
+            : "";
+
+        const status = String(p.status || "Unknown");
+        const statusClass = status.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+        const healthBadge = `<span class="status-badge ${this.esc(statusClass)}">${this.esc(status)}</span>`;
+        const meta = [
+            ["Plant code", this.esc(plantCode)],
+            ["Source", `<span class="pill pill-green">${this.esc(p.source || "RSWF planted plant")}</span>`],
+            ["Planted on", this.esc(p.planted_on || "—")],
+            ["Health", healthBadge],
+            ["Zone", this.zoneLabel(p.zone_code)],
+            ["Coordinates", hasCoords
+                ? `${this.esc(lat)}, ${this.esc(lng)} · <a href="${mapsUrl}" target="_blank" rel="noopener">Google Maps ↗</a>`
+                : "Not recorded"],
+            ["Last watered", this.esc(p.last_watered_on || "")],
+            ["Last watered by", this.esc(p.last_watered_by || "")],
+            ["Watering interval", p.watering_interval_days !== null && p.watering_interval_days !== undefined
+                ? `${this.esc(p.watering_interval_days)} day(s)`
+                : ""],
+            ["Created", this.esc(p.created_at ? String(p.created_at).slice(0, 10) : "")],
+            ["Last updated", this.esc(p.updated_at ? String(p.updated_at).slice(0, 10) : "")]
+        ].filter(([, value]) => value);
+
+        const sortedHistory = [...history].sort((a, b) =>
+            String(b.monitoring_date || "").localeCompare(String(a.monitoring_date || ""))
+        );
+        const historyHtml = sortedHistory.length
+            ? `<div class="detail-section-title">Health-check history (${sortedHistory.length})</div>
+               <div style="display:grid;gap:0.55rem">
+                   ${sortedHistory.map(visit => {
+                       const visitPhoto = visit.photo_url ? this.photoSrc(visit.photo_url) : "";
+                       const visitStatus = String(visit.status || "Unknown").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+                       return `<div style="border:1px solid var(--border-color);border-radius:8px;padding:0.7rem 0.8rem;background:var(--bg-inset)">
+                           <div style="display:flex;align-items:center;gap:0.55rem;flex-wrap:wrap">
+                               <strong>${this.esc(visit.monitoring_date || "Date not recorded")}</strong>
+                               <span class="status-badge ${this.esc(visitStatus)}">${this.esc(visit.status || "Unknown")}</span>
+                               <span class="muted" style="font-size:0.8rem">${this.esc(visit.observer || "RSWF Field Team")}</span>
+                           </div>
+                           ${visit.notes ? `<div style="margin-top:0.4rem;font-size:0.85rem;white-space:pre-wrap">${this.esc(visit.notes)}</div>` : ""}
+                           ${visitPhoto ? `<a href="${this.esc(visitPhoto)}" target="_blank" rel="noopener"><img src="${this.esc(visitPhoto)}" alt="Health check photo" style="margin-top:0.5rem;max-width:180px;max-height:140px;object-fit:cover;border-radius:6px;border:1px solid var(--border-color)"></a>` : ""}
+                       </div>`;
+                   }).join("")}
+               </div>`
+            : `<div class="note-card" style="margin-top:0.75rem">No health-check visits have been recorded for this plant yet.</div>`;
+
+        body.innerHTML = `
+            <div class="detail-layout">
+                <div>${photoHtml}</div>
+                <div>
+                    <div class="detail-name">${p.scientific_name ? `<i>${this.esc(p.scientific_name)}</i>` : this.esc(plantCode)}</div>
+                    ${p.common_name ? `<div class="detail-common">${this.esc(p.common_name)}</div>` : ""}
+                    <dl class="detail-meta">${meta.map(([label, value]) => `<dt>${label}</dt><dd>${value}</dd>`).join("")}</dl>
+                    ${p.notes ? `<div class="detail-section-title">Notes</div><div class="detail-notes">${this.esc(p.notes)}</div>` : ""}
+                    <div class="review-actions">
+                        <button type="button" class="btn-action" onclick="App.closeObservationDetail(); App.openEditPlantModal(${plantId})">✏️ Edit plant record</button>
+                        <button type="button" class="btn-primary btn-green btn-small" onclick="App.closeObservationDetail(); App.openMonitoringModal(${plantId}, ${codeArg})">➕ Record health check</button>
+                        <button type="button" class="btn-action info" onclick="App.closeObservationDetail(); App.openPlantHistoryModal(${plantId}, ${codeArg})">📋 Full health history</button>
+                    </div>
+                    <div class="detail-section-title">Plant health monitoring</div>
+                    ${historyHtml}
+                </div>
+            </div>`;
+    },
+
     renderObservationDetail(o, freshPredictions = null) {
         const body = document.getElementById("obs-detail-body");
         if (!body) return;
