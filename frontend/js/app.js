@@ -3292,8 +3292,11 @@ Status: ${c.status}`;
         const selectBar = document.getElementById("inat-select-bar");
         const reviewBtn = document.getElementById("btn-review-inat");
         const filterBar = document.getElementById("inat-queue-filters");
+        const filterCount = document.getElementById("inat-queue-filter-count");
         if (!empty || !list) return;
-        if (filterBar) filterBar.style.display = "none";
+        // Keep the controls visible during loading, on empty results, and after errors.
+        if (filterBar) filterBar.style.display = "flex";
+        if (filterCount) filterCount.textContent = "Loading records…";
         empty.style.display = "block";
         empty.innerHTML = `<div class="muted">Loading…</div>`;
         list.innerHTML = "";
@@ -3327,6 +3330,8 @@ Status: ${c.status}`;
             this._inatQueue = items;
             if (!items.length) {
                 empty.innerHTML = `<div style="font-size:2.5rem;margin-bottom:0.5rem">🌱</div><div>No RSWF planted-tree uploads found. Upload a tree photo and mark it as <strong>Planted by RSWF</strong>. After an NGO reviewer verifies its species, it will appear here.</div>`;
+                if (filterBar) filterBar.style.display = "flex";
+                if (filterCount) filterCount.textContent = "Showing 0 records";
                 return;
             }
             empty.style.display = "none";
@@ -3462,7 +3467,7 @@ Status: ${c.status}`;
             : uploadState === "publishing"
                 ? "This record is currently publishing"
                 : "NGO verification is required before publishing";
-        return `<tr id="inat-row-${i}" data-zone="${this.esc(String(o.zone || "").toUpperCase())}" data-observed-on="${this.esc(o.observed_on || "")}" data-record-id="${Number(o.id)}">
+        return `<tr id="inat-row-${i}" data-zone="${this.esc(String(o.zone || "").toUpperCase())}" data-observed-on="${this.esc(o.observed_on || "")}" data-created-at="${this.esc(o.created_at || "")}" data-record-id="${Number(o.id)}">
             <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" ${selectDisabled ? `disabled title="${selectTitle}"` : ""} onchange="App._updateInatSelectedCount()"></td>
             <td>${photo}</td>
             <td style="font-size:0.82rem">${this.esc(o.scientific_name || '—')}<br><span class="muted">${this.esc(o.common_name || '')}</span></td>
@@ -3484,36 +3489,60 @@ Status: ${c.status}`;
         </tr>`;
     },
 
-    // Apply zone and observation-date ordering without refetching the queue.
-    // Sorting table rows keeps each action attached to its original observation ID.
+    // Filter by Van Udyan zone and sort by recent record creation or observation date.
+    // Sorting DOM rows keeps every action and checkbox attached to the original observation.
     applyInatQueueFilters() {
         const tbody = document.getElementById("inat-queue-tbody");
-        if (!tbody) return;
+        const count = document.getElementById("inat-queue-filter-count");
+        if (!tbody) {
+            if (count) count.textContent = "Showing 0 records";
+            return;
+        }
+
         const zoneFilter = (document.getElementById("inat-zone-filter") || {}).value || "";
-        const sortOrder = (document.getElementById("inat-date-sort") || {}).value || "newest";
+        const sortOrder = (document.getElementById("inat-date-sort") || {}).value || "recent";
         const rows = Array.from(tbody.querySelectorAll("tr"));
         const knownZones = new Set(["ZONE A", "ZONE B", "ZONE C"]);
+
         rows.sort((a, b) => {
-            const rawA = a.dataset.observedOn || "", rawB = b.dataset.observedOn || "";
-            const timeA = rawA ? Date.parse(rawA) : NaN, timeB = rawB ? Date.parse(rawB) : NaN;
-            const validA = Number.isFinite(timeA), validB = Number.isFinite(timeB);
-            // Keep undated records at the bottom for either ordering.
+            const idA = Number(a.dataset.recordId) || 0;
+            const idB = Number(b.dataset.recordId) || 0;
+
+            // Default: put the most recently added records first. Primary-key ordering
+            // also works when the API omits created_at or observed_on from a record.
+            if (sortOrder === "recent") {
+                const addedA = Date.parse(a.dataset.createdAt || "");
+                const addedB = Date.parse(b.dataset.createdAt || "");
+                if (Number.isFinite(addedA) && Number.isFinite(addedB) && addedA !== addedB) {
+                    return addedB - addedA;
+                }
+                return idB - idA;
+            }
+
+            const observedA = Date.parse(a.dataset.observedOn || "");
+            const observedB = Date.parse(b.dataset.observedOn || "");
+            const validA = Number.isFinite(observedA);
+            const validB = Number.isFinite(observedB);
+
+            // Keep records without observation dates at the bottom for either date order.
             if (validA !== validB) return validA ? -1 : 1;
-            const idA = Number(a.dataset.recordId) || 0, idB = Number(b.dataset.recordId) || 0;
-            if (!validA && !validB) return sortOrder === "oldest" ? idA - idB : idB - idA;
-            const byDate = timeA - timeB;
+            if (!validA && !validB) return idB - idA;
+
+            const byDate = observedA - observedB;
             if (byDate !== 0) return sortOrder === "oldest" ? byDate : -byDate;
-            return sortOrder === "oldest" ? idA - idB : idB - idA;
+            return idB - idA;
         });
+
         let visibleCount = 0;
         rows.forEach(row => {
             tbody.appendChild(row);
             const zone = (row.dataset.zone || "").trim().toUpperCase();
-            const matchesZone = !zoneFilter || (zoneFilter === "outside" ? !knownZones.has(zone) : zone === zoneFilter);
+            const matchesZone = !zoneFilter ||
+                (zoneFilter === "outside" ? !knownZones.has(zone) : zone === zoneFilter);
             row.style.display = matchesZone ? "" : "none";
             if (matchesZone) visibleCount++;
         });
-        const count = document.getElementById("inat-queue-filter-count");
+
         if (count) count.textContent = `Showing ${visibleCount} of ${rows.length} records`;
         this._updateInatSelectedCount();
     },
