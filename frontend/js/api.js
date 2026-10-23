@@ -372,6 +372,14 @@ class ApiService {
         });
     }
 
+    static bulkDeletePlantedPlants(ids) {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint("/planted-plants/bulk-delete"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids })
+        });
+    }
+
     // Phase 8 Dataset Export Download Helpers
     static buildExportUrl(path, params = {}) {
         const queryParams = new URLSearchParams();
@@ -423,6 +431,14 @@ class ApiService {
     static deleteObservation(obsId) {
         return this.fetchJson(window.APP_CONFIG.getEndpoint(`/observations/${obsId}`), {
             method: "DELETE"
+        });
+    }
+
+    static bulkDeleteObservations(ids) {
+        return this.fetchJson(window.APP_CONFIG.getEndpoint("/observations/bulk-delete"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids })
         });
     }
 
