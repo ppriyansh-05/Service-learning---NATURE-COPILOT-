@@ -863,19 +863,26 @@ const App = {
         (plantedRes.data || []).forEach(p => {
             if (p.latitude == null || p.longitude == null) return;
             const statusColor = { Alive: "#10b981", Dead: "#ef4444", Unknown: "#f97316" }[p.status] || "#94a3b8";
-            // RSWF-planted plants use a red fill; the outline still indicates health status.
+            const plantPhoto = p.photo_url ? this.photoSrc(p.photo_url) : "";
+            const plantThumb = p.photo_url ? this.thumbSrc(p.photo_url) : "";
+            // RSWF-planted plants use a red fill; the outline indicates their health status.
             const marker = L.circleMarker([p.latitude, p.longitude], {
                 radius: 7, fillColor: "#ef4444", color: statusColor, weight: 2.5, opacity: 1, fillOpacity: 0.9
             });
+            const plantPhotoHtml = plantPhoto
+                ? `<a href="${this.esc(plantPhoto)}" target="_blank" rel="noopener" title="Open full-size plant photo"><img class="popup-photo" src="${this.esc(plantThumb)}" alt="Photo of ${this.esc(p.common_name || p.plant_code || "planted plant")}" loading="lazy" onerror="App.replaceMissingPhoto(this.parentElement, 'popup-photo-empty', '📷 Plant photo file missing')"></a>`
+                : `<div class="popup-photo-empty">📷 No photo attached to this plant record</div>`;
             marker.bindPopup(`
                 <div>
                     <div class="popup-title" style="color:#60a5fa">🌱 ${this.esc(p.common_name || p.scientific_name || p.plant_code)}</div>
+                    ${plantPhotoHtml}
                     ${popupRow("Plant code", this.esc(p.plant_code))}
                     ${popupRow("Scientific name", p.scientific_name ? `<i>${this.esc(p.scientific_name)}</i>` : "")}
                     ${popupRow("Planted", this.esc(p.planted_on))}
                     ${popupRow("Health", `<span style="color:${statusColor};font-weight:600">${this.esc(p.status)}</span>`)}
                     ${popupRow("Zone", this.esc(p.zone_code || "Outside active zones"))}
-                </div>`, { maxWidth: 250 });
+                    <div style="margin-top:8px"><button class="link-btn" onclick="App.openPlantedPlantDetail(${Number(p.id)})">View full details →</button></div>
+                </div>`, { maxWidth: 280 });
             this.mapLayers.planted.addLayer(marker);
         });
 
