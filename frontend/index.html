@@ -455,11 +455,10 @@
                     <h3>Review before publishing</h3>
                     <span class="panel-tag">Approval required</span>
                 </div>
-                <p class="muted" style="margin-top:0">Check the species, photo, date and coordinates below. Approval submits the selected observations under the connected iNaturalist account.</p>
+                <p class="muted" style="margin-top:0">Review selected records below and process them one at a time. Each <b>Approve &amp; Open iNaturalist</b> button opens only that record. Attach the downloaded photo and submit the observation on iNaturalist, then save its URL on the same card.</p>
                 <div id="inat-approval-records" style="display:grid;gap:0.75rem"></div>
                 <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:1rem">
-                    <button class="btn-primary btn-blue" id="btn-approve-upload-inat" onclick="App.approveAndUploadToInat()">✓ Approve &amp; Upload</button>
-                    <button class="btn-primary" onclick="App.cancelInatReview()">Cancel</button>
+                    <button class="btn-primary" onclick="App.cancelInatReview()">Close review</button>
                 </div>
                 <div id="inat-upload-progress" class="muted" style="margin-top:0.75rem" aria-live="polite"></div>
             </div>
@@ -481,6 +480,14 @@
                         <option value="recent" selected>Recently added (newest first)</option>
                         <option value="newest">Observation date: new to old</option>
                         <option value="oldest">Observation date: old to new</option>
+                    </select>
+                </label>
+                <label style="display:flex;flex-direction:column;gap:0.3rem;font-size:0.8rem;color:var(--v-text-secondary)">
+                    iNaturalist publishing status
+                    <select id="inat-published-filter" class="select-input" aria-label="Filter records by iNaturalist publishing status" onchange="App.applyInatQueueFilters()">
+                        <option value="">All records</option>
+                        <option value="not-published">Not published</option>
+                        <option value="published">Published</option>
                     </select>
                 </label>
                 <span id="inat-queue-filter-count" class="muted" style="font-size:0.82rem;padding-bottom:0.55rem">Showing records</span>
@@ -1268,9 +1275,9 @@
 <script src="js/config.local.js" onerror="void 0"></script>
 
 <!-- Frontend JavaScript Modules -->
-<script src="js/config.js?v=v2026.10.24-planted-detail1"></script>
-<script src="js/api.js?v=v2026.10.24-planted-detail1"></script>
-<script src="js/app.js?v=v2026.10.24-planted-detail1"></script>
+<script src="js/config.js?v=v2026.10.26-individual-inat-review"></script>
+<script src="js/api.js?v=v2026.10.26-individual-inat-review"></script>
+<script src="js/app.js?v=v2026.10.26-individual-inat-review"></script>
 
 </body>
 </html>
