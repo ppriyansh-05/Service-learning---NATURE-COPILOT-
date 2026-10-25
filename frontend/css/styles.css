@@ -78,6 +78,9 @@ a { color: var(--primary); }
 }
 
 .brand-header {
+    /* Keep the original sidebar spacer in the flex layout while letting the logo
+       visually sit beside the main title, without shifting the header controls. */
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -88,15 +91,20 @@ a { color: var(--primary); }
 
 .brand-logo {
     display: block;
-    width: 62px;
-    height: 62px;
-    max-width: 100%;
+    position: absolute;
+    top: -10px;
+    right: -32px;
+    z-index: 110;
+    width: 68px;
+    height: 68px;
+    max-width: none;
     flex-shrink: 0;
     object-fit: contain;
     object-position: center;
     background: transparent;
     border-radius: 0;
     box-shadow: 0 0 12px rgba(16, 185, 129, 0.12);
+    pointer-events: none;
 }
 
 .brand-title {
@@ -1259,7 +1267,13 @@ a { color: var(--primary); }
         position: sticky;
         top: 0;
     }
-    .brand-header { margin: 0; padding: 0; }
+    .brand-header { position: static; min-height: 0; width: auto; margin: 0; padding: 0; }
+    .brand-logo {
+        position: static;
+        width: 42px;
+        height: 42px;
+        max-width: none;
+    }
     .brand-title, .brand-subtitle { display: none; }
     .brand-icon { width: 34px; height: 34px; font-size: 1.1rem; }
     .nav-list {
