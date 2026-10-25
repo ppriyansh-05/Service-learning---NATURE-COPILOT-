@@ -3710,17 +3710,74 @@ Status: ${c.status}`;
         const url = window.prompt("After submitting on iNaturalist, paste the new observation URL (https://www.inaturalist.org/observations/123456).");
         if (url === null) return;
         const clean = url.trim();
-        if (!/^https:\/\/www\.inaturalist\.org\/observations\/\d+(?:[?#].*)?$/.test(clean)) {
+        const match = clean.match(/^https:\/\/www\.inaturalist\.org\/observations\/(\d+)(?:[?#].*)?$/);
+        if (!match) {
             this.notify("Enter a valid iNaturalist observation URL.", "warning");
             return;
         }
+        const remoteId = Number(match[1]);
+        const uploadedAt = new Date().toISOString();
         try {
-            await ApiService.updateObservation(obsId, { observation_url: clean });
-            this.notify("iNaturalist record link saved. Use “Manage on iNaturalist” to edit or delete it on iNaturalist.", "success", 7000);
-            await this.loadInatUploadQueue();
+            // Save the submitted record as published, then update only its UI state.
+            await ApiService.updateObservation(obsId, {
+                observation_url: clean,
+                inaturalist_observation_id: remoteId,
+                inaturalist_upload_status: "published",
+                inaturalist_uploaded_at: uploadedAt
+            });
+
+            const previous = (this._inatQueue || []).find(o => Number(o.id) === Number(obsId)) || {};
+            const refreshed = await ApiService.getObservationById(obsId).catch(() => null);
+            const updated = {
+                ...previous,
+                ...(refreshed || {}),
+                id: Number(obsId),
+                observation_url: clean,
+                inaturalist_observation_id: remoteId,
+                inaturalist_upload_status: "published",
+                inaturalist_uploaded_at: uploadedAt
+            };
+
+            this.updateInatQueueAfterLink(updated);
+            this.notify("iNaturalist URL saved. That record is marked Published and removed from the pending review cards; your other selections are preserved.", "success", 7000);
         } catch (e) {
             this.notify(`Could not save iNaturalist link: ${e.message}`, "error");
         }
+    },
+
+    // Update the linked row and review panel in place; don't reload the whole queue.
+    updateInatQueueAfterLink(updatedRecord) {
+        const processedId = String(updatedRecord.id);
+        const selectedIds = new Set(
+            Array.from(document.querySelectorAll(".inat-select-cb:checked"))
+                .map(cb => String(cb.dataset.id))
+                .filter(id => id !== processedId)
+        );
+        const queue = this._inatQueue || [];
+        const index = queue.findIndex(o => String(o.id) === processedId);
+        if (index >= 0) {
+            queue[index] = { ...queue[index], ...updatedRecord };
+        } else {
+            queue.push(updatedRecord);
+        }
+        this._inatQueue = queue;
+
+        const tbody = document.getElementById("inat-queue-tbody");
+        if (tbody) {
+            tbody.innerHTML = queue.map((o, i) => this._inatQueueRow(o, i)).join("");
+            document.querySelectorAll(".inat-select-cb").forEach(cb => {
+                cb.checked = !cb.disabled && selectedIds.has(String(cb.dataset.id));
+            });
+            this.applyInatQueueFilters();
+        }
+
+        this._inatReviewItems = (this._inatReviewItems || [])
+            .filter(o => String(o.id) !== processedId);
+        const progress = document.getElementById("inat-upload-progress");
+        if (progress) {
+            progress.textContent = `Record #${processedId} saved as Published. Remaining selected records are still ready for review.`;
+        }
+        this.renderInatReviewItems(this._inatReviewItems);
     },
 
     async connectInaturalist() {
@@ -3790,11 +3847,19 @@ Status: ${c.status}`;
             return;
         }
         this._inatReviewItems = items;
+        const progress = document.getElementById("inat-upload-progress");
+        if (progress) progress.textContent = "";
+        this.renderInatReviewItems(items);
+    },
+
+    renderInatReviewItems(items = []) {
         const panel = document.getElementById("inat-approval-panel");
         const container = document.getElementById("inat-approval-records");
-        const progress = document.getElementById("inat-upload-progress");
         if (!panel || !container) return;
-        if (progress) progress.textContent = "";
+        if (!items.length) {
+            panel.style.display = "none";
+            return;
+        }
         container.innerHTML = items.map(o => {
             const photoSrc = o.photo_url ? this.photoSrc(o.photo_url) : "";
             const photo = o.photo_url ? `<div style="display:flex;flex-direction:column;align-items:center;gap:0.4rem">
