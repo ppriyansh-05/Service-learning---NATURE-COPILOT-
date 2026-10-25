@@ -3587,7 +3587,8 @@ Status: ${c.status}`;
             : uploadState === "publishing"
                 ? "This record is currently publishing"
                 : "NGO verification is required before publishing";
-        return `<tr id="inat-row-${i}" data-zone="${this.esc(String(o.zone || "").toUpperCase())}" data-observed-on="${this.esc(o.observed_on || "")}" data-created-at="${this.esc(o.created_at || "")}" data-record-id="${Number(o.id)}">
+        const publicationFilterState = uploadState === "published" || hasRemoteRecord;
+        return `<tr id="inat-row-${i}" data-zone="${this.esc(String(o.zone || "").toUpperCase())}" data-published="${publicationFilterState ? "true" : "false"}" data-observed-on="${this.esc(o.observed_on || "")}" data-created-at="${this.esc(o.created_at || "")}" data-record-id="${Number(o.id)}">
             <td><input type="checkbox" class="inat-select-cb" data-idx="${i}" data-id="${o.id}" ${selectDisabled ? `disabled title="${selectTitle}"` : ""} onchange="App._updateInatSelectedCount()"></td>
             <td>${photo}</td>
             <td style="font-size:0.82rem">${this.esc(o.scientific_name || '—')}<br><span class="muted">${this.esc(o.common_name || '')}</span></td>
@@ -3620,6 +3621,7 @@ Status: ${c.status}`;
         }
 
         const zoneFilter = (document.getElementById("inat-zone-filter") || {}).value || "";
+        const publicationFilter = (document.getElementById("inat-published-filter") || {}).value || "";
         const sortOrder = (document.getElementById("inat-date-sort") || {}).value || "recent";
         const rows = Array.from(tbody.querySelectorAll("tr"));
         const knownZones = new Set(["ZONE A", "ZONE B", "ZONE C"]);
@@ -3659,8 +3661,12 @@ Status: ${c.status}`;
             const zone = (row.dataset.zone || "").trim().toUpperCase();
             const matchesZone = !zoneFilter ||
                 (zoneFilter === "outside" ? !knownZones.has(zone) : zone === zoneFilter);
-            row.style.display = matchesZone ? "" : "none";
-            if (matchesZone) visibleCount++;
+            const isPublished = row.dataset.published === "true";
+            const matchesPublication = !publicationFilter ||
+                (publicationFilter === "published" ? isPublished : !isPublished);
+            const visible = matchesZone && matchesPublication;
+            row.style.display = visible ? "" : "none";
+            if (visible) visibleCount++;
         });
 
         if (count) count.textContent = `Showing ${visibleCount} of ${rows.length} records`;
@@ -3793,20 +3799,25 @@ Status: ${c.status}`;
             const photoSrc = o.photo_url ? this.photoSrc(o.photo_url) : "";
             const photo = o.photo_url ? `<div style="display:flex;flex-direction:column;align-items:center;gap:0.4rem">
                 <img src="${this.esc(this.thumbSrc(o.photo_url))}" alt="Tree photo" style="width:100px;height:100px;object-fit:cover;border-radius:8px;border:1px solid var(--v-stroke)">
-                <button type="button" class="btn-action" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="App.downloadPhotoFile('${this.esc(photoSrc)}', 'naturecopilot_obs${o.id}.jpg')">⬇ Download</button>
-            </div>` : "";
-            return `<div class="panel" style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap">
+                <button type="button" class="btn-action" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="App.downloadPhotoFile('${this.esc(photoSrc)}', 'naturecopilot_obs${o.id}.jpg')">⬇ Download photo</button>
+            </div>` : `<div class="muted" style="font-size:0.82rem">No photo attached</div>`;
+            return `<div class="panel" id="inat-review-record-${Number(o.id)}" style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap">
                 ${photo}
-                <div style="flex:1;min-width:180px">
-                    <strong>${this.esc(o.scientific_name || "Unknown species")}</strong>
+                <div style="flex:1;min-width:220px">
+                    <div style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap">
+                        <strong>${this.esc(o.scientific_name || "Unknown species")}</strong>
+                        <span class="pill pill-grey">Record #${Number(o.id)}</span>
+                    </div>
                     <div class="muted" style="font-size:0.84rem">${this.esc(o.common_name || "")}</div>
                     <div style="margin-top:0.4rem;font-size:0.85rem">Date: ${this.esc(o.observed_on || "Missing date")} · Zone: ${this.esc(o.zone || "—")}</div>
                     <div style="font-size:0.85rem">GPS: ${this.esc(o.latitude)} , ${this.esc(o.longitude)}</div>
-                    <div class="muted" style="font-size:0.82rem;margin-top:0.35rem">Record #${this.esc(o.id)} · NGO verification: ${this.esc(o.identification_status)}</div>
+                    <div class="muted" style="font-size:0.82rem;margin-top:0.35rem">NGO verification: ${this.esc(o.identification_status)}</div>
                     ${o.notes ? `<p style="font-size:0.84rem;margin:0.4rem 0 0">${this.esc(o.notes)}</p>` : ""}
-                    ${o.photo_url ? `<div style="margin-top:0.5rem">
-                        <button type="button" class="btn-action" style="font-size:0.75rem;padding:0.25rem 0.6rem" onclick="App.copyPhotoToClipboard('${this.esc(photoSrc)}').then(ok => App.notify(ok ? '📋 Photo copied to clipboard! Paste it on iNaturalist.' : 'Could not copy automatically. Click Download instead.', ok ? 'success' : 'warning'))">📋 Copy Photo to Clipboard</button>
-                    </div>` : ""}
+                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.75rem">
+                        <button type="button" class="btn-primary btn-blue" id="btn-approve-inat-${Number(o.id)}" onclick="App.approveSingleInatRecord(${Number(o.id)})">✓ Approve &amp; Open iNaturalist</button>
+                        <button type="button" class="btn-action" onclick="App.linkInaturalistRecord(${Number(o.id)})">🔗 Save iNaturalist URL</button>
+                    </div>
+                    <div id="inat-review-status-${Number(o.id)}" class="muted" style="font-size:0.82rem;margin-top:0.45rem" aria-live="polite"></div>
                 </div>
             </div>`;
         }).join("");
@@ -3820,71 +3831,66 @@ Status: ${c.status}`;
         if (panel) panel.style.display = "none";
     },
 
-    async approveAndUploadToInat() {
+    async approveSingleInatRecord(obsId) {
         const items = this._inatReviewItems || [];
-        if (!items.length) {
-            this.notify("Review selected records before approving.", "warning");
+        const item = items.find(record => Number(record.id) === Number(obsId)) ||
+            (this._inatQueue || []).find(record => Number(record.id) === Number(obsId));
+        if (!item) {
+            this.notify("This record is no longer in the review list. Refresh the queue and select it again.", "warning");
             return;
         }
         if (!ApiService.getNgoPassword()) {
-            this.openAuthModal(() => this.approveAndUploadToInat());
+            this.openAuthModal(() => this.approveSingleInatRecord(obsId));
             return;
         }
-        const names = items.map(o => o.scientific_name || `#${o.id}`).join(", ");
-        if (!window.confirm(`Open ${items.length} observation(s) on iNaturalist with details pre-filled?\n\n${names}\n\nMake sure you are already signed in to iNaturalist in this browser before clicking OK.`)) return;
 
-        const approveButton = document.getElementById("btn-approve-upload-inat");
-        const progress = document.getElementById("inat-upload-progress");
-        if (approveButton) approveButton.disabled = true;
+        const name = item.scientific_name || `Observation #${item.id}`;
+        if (!window.confirm(`Approve ${name} and open only this record on iNaturalist?\n\nThe form will be pre-filled; you must attach the downloaded photo and submit on iNaturalist.`)) return;
 
-        try {
-            // 1. Download or copy photos for each selected record so user doesn't have to search
-            for (let index = 0; index < items.length; index++) {
-                const item = items[index];
-                if (item.photo_url) {
-                    const filename = `naturecopilot_${(item.scientific_name || "tree").replace(/\s+/g, "_")}_obs${item.id}.jpg`;
-                    this.downloadPhotoFile(this.photoSrc(item.photo_url), filename);
-                    // Also attempt to copy the first image directly to system clipboard
-                    if (index === 0) {
-                        this.copyPhotoToClipboard(this.photoSrc(item.photo_url));
-                    }
-                }
-            }
-
-            // 2. Open each pre-filled iNaturalist new-observation page in a new tab.
-            for (let index = 0; index < items.length; index++) {
-                const item = items[index];
-                if (progress) progress.textContent = `Opening record ${index + 1} of ${items.length}: ${item.scientific_name || "observation"}…`;
-
-                const params = new URLSearchParams({
-                    taxon_name: item.scientific_name || "",
-                    observed_on_string: (item.observed_on || "").slice(0, 10),
-                    description: (item.notes ? item.notes + "\n\n" : "") + `Planted by RSWF at Van Udyan, Bavdhan, Pune. Zone: ${item.zone || "unknown"}.`,
-                    place_guess: "Bavdhan Van Udyan, Pune, Maharashtra, India",
-                    latitude: item.latitude || "",
-                    longitude: item.longitude || "",
-                });
-                window.open(`https://www.inaturalist.org/observations/new?${params.toString()}`, `_blank`);
-            }
-
-            // Close the review panel and tell user exactly what to do next.
-            this._inatReviewItems = [];
-            const panel = document.getElementById("inat-approval-panel");
-            if (panel) panel.style.display = "none";
-
-            if (progress) {
-                progress.innerHTML = `✅ <strong>Opened ${items.length} record(s) on iNaturalist.</strong> Photo downloaded to your browser/Downloads bar — drag & drop or paste it into iNaturalist, then click <strong>"Link existing record"</strong> below to save the URL.`;
-            }
-
-            this.notify(
-                `🌿 Photo downloaded & details pre-filled! Drag the downloaded image into the iNaturalist tab (or paste), then click “Link existing record”.`,
-                "success", 14000
-            );
-
-            await this.loadInatUploadQueue();
-        } finally {
-            if (approveButton) approveButton.disabled = false;
+        const params = new URLSearchParams({
+            taxon_name: item.scientific_name || "",
+            observed_on_string: (item.observed_on || "").slice(0, 10),
+            description: (item.notes ? item.notes + "\n\n" : "") + `Planted by RSWF at Van Udyan, Bavdhan, Pune. Zone: ${item.zone || "unknown"}.`,
+            place_guess: "Bavdhan Van Udyan, Pune, Maharashtra, India",
+            latitude: item.latitude || "",
+            longitude: item.longitude || ""
+        });
+        const tab = window.open(`https://www.inaturalist.org/observations/new?${params.toString()}`, "_blank");
+        if (!tab) {
+            this.notify("The browser blocked the iNaturalist tab. Allow pop-ups for this dashboard, then try again.", "warning", 8000);
+            return;
         }
+        try { tab.opener = null; } catch (_) {}
+
+        const photoUrl = item.photo_url ? this.photoSrc(item.photo_url) : "";
+        if (photoUrl) {
+            const filename = `naturecopilot_${(item.scientific_name || "tree").replace(/\s+/g, "_")}_obs${item.id}.jpg`;
+            this.downloadPhotoFile(photoUrl, filename);
+            this.copyPhotoToClipboard(photoUrl).then(ok => {
+                const status = document.getElementById(`inat-review-status-${Number(item.id)}`);
+                if (status && ok) status.textContent = "Photo copied to clipboard and download started. Paste/attach it on iNaturalist, submit the observation, then save its URL here.";
+            }).catch(() => {});
+        }
+
+        const button = document.getElementById(`btn-approve-inat-${Number(item.id)}`);
+        if (button) {
+            button.disabled = true;
+            button.textContent = "✓ Opened in iNaturalist";
+        }
+        const status = document.getElementById(`inat-review-status-${Number(item.id)}`);
+        if (status) status.textContent = `Opened only ${name}. Attach the downloaded photo, submit on iNaturalist, then use “Save iNaturalist URL” on this card.`;
+        const progress = document.getElementById("inat-upload-progress");
+        if (progress) progress.textContent = `Opened one record: ${name}. Other selected records have not been opened.`;
+    },
+
+    // Backward-compatible handler: process only one selected record at a time.
+    async approveAndUploadToInat() {
+        const items = this._inatReviewItems || [];
+        if (items.length !== 1) {
+            this.notify("Use the individual “Approve & Open iNaturalist” button on each review card. Only one record will be opened at a time.", "info", 7000);
+            return;
+        }
+        return this.approveSingleInatRecord(items[0].id);
     },
 
     // Helper to download an image file to browser downloads so user can drag-and-drop into iNaturalist
