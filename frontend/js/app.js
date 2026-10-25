@@ -3881,6 +3881,7 @@ Status: ${c.status}`;
                     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.75rem">
                         <button type="button" class="btn-primary btn-blue" id="btn-approve-inat-${Number(o.id)}" onclick="App.approveSingleInatRecord(${Number(o.id)})">✓ Approve &amp; Open iNaturalist</button>
                         <button type="button" class="btn-action" onclick="App.linkInaturalistRecord(${Number(o.id)})">🔗 Save iNaturalist URL</button>
+                        <button type="button" class="btn-action delete" onclick="App.cancelSingleInatReview(${Number(o.id)})" title="Cancel this record's pending review without deleting the record">✕ Cancel</button>
                     </div>
                     <div id="inat-review-status-${Number(o.id)}" class="muted" style="font-size:0.82rem;margin-top:0.45rem" aria-live="polite"></div>
                 </div>
@@ -3888,6 +3889,28 @@ Status: ${c.status}`;
         }).join("");
         panel.style.display = "block";
         panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+
+    cancelSingleInatReview(obsId) {
+        const processedId = String(Number(obsId));
+        const card = document.getElementById(`inat-review-record-${processedId}`);
+        if (!card) return;
+
+        // Cancel only this pending review item. Do not delete or change the observation record.
+        this._inatReviewItems = (this._inatReviewItems || [])
+            .filter(item => String(item.id) !== processedId);
+        const checkbox = Array.from(document.querySelectorAll(".inat-select-cb"))
+            .find(cb => String(cb.dataset.id) === processedId);
+        if (checkbox) checkbox.checked = false;
+
+        this.renderInatReviewItems(this._inatReviewItems);
+        this._updateInatSelectedCount();
+
+        const progress = document.getElementById("inat-upload-progress");
+        if (progress) {
+            progress.textContent = `Cancelled review for record #${processedId}. The observation remains saved and was not deleted.`;
+        }
+        this.notify(`Review cancelled for record #${processedId}. The original observation is unchanged.`, "info", 5000);
     },
 
     cancelInatReview() {
